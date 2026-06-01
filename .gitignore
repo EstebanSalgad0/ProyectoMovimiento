@@ -1,0 +1,12 @@
+# Entornos de Python
+servidor/venv/
+servidor/__pycache__/
+*.pyc
+
+# Flutter / Android
+app/build/
+app/.dart_tool/
+app/.idea/
+app/android/.gradle/
+app/android/local.properties
+app/ios/Pods/

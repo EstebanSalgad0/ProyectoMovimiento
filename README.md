@@ -163,3 +163,10 @@ flutter run
 - Este proyecto está en fase de prototipo, así que la prioridad actual es validar la idea y el flujo general.
 - La salida del sistema debe interpretarse como apoyo visual, no como evaluación definitiva.
 - El objetivo es sentar una base para mejorar después el análisis, la interfaz y los tipos de ejercicios soportados.
+
+---
+
+## Autores
+
+- **Esteban Salgado** — Responsable del desarrollo del modelo de IA, el backend y la integración del análisis de movimiento.
+- **Martín Ulloa (MartinUlloaG)** — Responsable del apartado visual y del desarrollo de la aplicación móvil en Flutter.

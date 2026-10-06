@@ -139,7 +139,14 @@ class TarjetaLogro extends StatelessWidget {
               children: [
                 Icon(Icons.check_circle_rounded, size: 16, color: p.exito),
                 const SizedBox(width: 4),
-                Text('Desbloqueado', style: context.textos.labelSmall?.copyWith(color: p.exito)),
+                Flexible(
+                  child: Text(
+                    'Desbloqueado',
+                    style: context.textos.labelSmall?.copyWith(color: p.exito),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             )
           else ...[

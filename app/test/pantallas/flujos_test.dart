@@ -72,10 +72,7 @@ void main() {
   });
 
   testWidgets('la configuración inicial se puede omitir', (tester) async {
-    await montarApp(
-      tester,
-      preferencias: {..._sesionIniciada, 'perfil.pendiente.usuario.prueba': true},
-    );
+    await montarApp(tester, preferencias: {..._sesionIniciada, 'perfil.pendiente.usuario.prueba': true});
     expect(find.text('Configura tu perfil'), findsOneWidget);
     await tester.tap(find.text('Omitir'));
     await avanzar(tester);

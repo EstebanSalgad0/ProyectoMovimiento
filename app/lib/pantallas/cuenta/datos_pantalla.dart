@@ -144,49 +144,7 @@ class _DatosPantallaState extends ConsumerState<DatosPantalla> {
   }
 
   Future<void> _eliminarCuenta() async {
-    final ctrl = TextEditingController();
-    String? error;
-    final confirmado = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialog) => AlertDialog(
-          title: const Text('Eliminar cuenta'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Se eliminarán tu cuenta y todos tus datos de este teléfono: sesiones, evaluaciones, rutinas y '
-                'videos. Escribe tu contraseña para confirmar.',
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: ctrl,
-                obscureText: true,
-                autofocus: true,
-                decoration: InputDecoration(labelText: 'Contraseña', errorText: error),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: context.paleta.peligro),
-              onPressed: () async {
-                try {
-                  await ref.read(authProvider.notifier).eliminarCuenta(ctrl.text);
-                  if (context.mounted) Navigator.pop(context, true);
-                } on ErrorAuth catch (e) {
-                  setDialog(() => error = e.mensaje);
-                }
-              },
-              child: const Text('Eliminar'),
-            ),
-          ],
-        ),
-      ),
-    );
-    ctrl.dispose();
+    final confirmado = await showDialog<bool>(context: context, builder: (_) => const _DialogoEliminarCuenta());
     if (confirmado == true && mounted) context.go('/');
   }
 
@@ -349,6 +307,72 @@ class _DatosPantallaState extends ConsumerState<DatosPantalla> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DialogoEliminarCuenta extends ConsumerStatefulWidget {
+  const _DialogoEliminarCuenta();
+
+  @override
+  ConsumerState<_DialogoEliminarCuenta> createState() => _DialogoEliminarCuentaState();
+}
+
+class _DialogoEliminarCuentaState extends ConsumerState<_DialogoEliminarCuenta> {
+  final _ctrl = TextEditingController();
+  String? _error;
+  bool _eliminando = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _eliminar() async {
+    setState(() => _eliminando = true);
+    try {
+      await ref.read(authProvider.notifier).eliminarCuenta(_ctrl.text);
+      if (mounted) Navigator.pop(context, true);
+    } on ErrorAuth catch (e) {
+      setState(() {
+        _error = e.mensaje;
+        _eliminando = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Eliminar cuenta'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Se eliminarán tu cuenta y todos tus datos de este teléfono: sesiones, evaluaciones, rutinas y '
+              'videos. Escribe tu contraseña para confirmar.',
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _ctrl,
+              obscureText: true,
+              autofocus: true,
+              decoration: InputDecoration(labelText: 'Contraseña', errorText: _error),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: context.paleta.peligro),
+          onPressed: _eliminando ? null : _eliminar,
+          child: const Text('Eliminar'),
+        ),
+      ],
     );
   }
 }

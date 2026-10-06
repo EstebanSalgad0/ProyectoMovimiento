@@ -41,6 +41,7 @@ Future<ProviderContainer> montarApp(
   Map<String, Object> preferencias = const {},
   List<Sesion> sesiones = const [],
   List<EvaluacionFuncional> evaluaciones = const [],
+  AdjuntosMemoria? adjuntos,
 }) async {
   SharedPreferences.setMockInitialValues(preferencias);
   final prefs = await SharedPreferences.getInstance();
@@ -51,7 +52,7 @@ Future<ProviderContainer> montarApp(
       especificacionProvider.overrideWithValue(spec),
       historialServicioProvider.overrideWithValue(HistorialMemoria(sesiones)),
       evaluacionesServicioProvider.overrideWithValue(EvaluacionesMemoria(evaluaciones)),
-      adjuntosServicioProvider.overrideWithValue(AdjuntosMemoria()),
+      adjuntosServicioProvider.overrideWithValue(adjuntos ?? AdjuntosMemoria()),
     ],
   );
   addTearDown(contenedor.dispose);

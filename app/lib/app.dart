@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/config/app_config.dart';
 import 'core/tema/tema.dart';
+import 'core/widgets/celebrador_logros.dart';
 import 'estado/proveedores.dart';
 import 'rutas.dart';
 
@@ -20,6 +21,7 @@ class MiApp extends ConsumerWidget {
       darkTheme: AppTema.oscuro,
       themeMode: tema,
       routerConfig: ref.watch(routerProvider),
+      builder: (context, child) => CelebradorLogros(child: child ?? const SizedBox.shrink()),
       locale: const Locale('es', 'CL'),
       supportedLocales: const [Locale('es', 'CL'), Locale('es')],
       localizationsDelegates: const [

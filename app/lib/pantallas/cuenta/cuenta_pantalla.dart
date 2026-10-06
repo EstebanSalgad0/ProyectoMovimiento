@@ -34,62 +34,8 @@ class CuentaPantalla extends ConsumerWidget {
     if (ok == true) await ref.read(authProvider.notifier).cerrarSesion();
   }
 
-  Future<void> _cambiarContrasena(BuildContext context, WidgetRef ref) async {
-    final actual = TextEditingController();
-    final nueva = TextEditingController();
-    final repetida = TextEditingController();
-    String? error;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialog) => AlertDialog(
-          title: const Text('Cambiar contraseña'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: actual,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Contraseña actual'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: nueva,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Nueva contraseña', helperText: 'Mínimo 6 caracteres'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: repetida,
-                obscureText: true,
-                decoration: InputDecoration(labelText: 'Repite la nueva contraseña', errorText: error),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-            FilledButton(
-              onPressed: () async {
-                if (nueva.text != repetida.text) {
-                  setDialog(() => error = 'Las contraseñas no coinciden');
-                  return;
-                }
-                try {
-                  await ref.read(authProvider.notifier).cambiarContrasena(actual: actual.text, nueva: nueva.text);
-                  if (context.mounted) Navigator.pop(context, true);
-                } on ErrorAuth catch (e) {
-                  setDialog(() => error = e.mensaje);
-                }
-              },
-              child: const Text('Guardar'),
-            ),
-          ],
-        ),
-      ),
-    );
-    for (final c in [actual, nueva, repetida]) {
-      c.dispose();
-    }
+  Future<void> _cambiarContrasena(BuildContext context) async {
+    final ok = await showDialog<bool>(context: context, builder: (_) => const _DialogoContrasena());
     if (ok == true && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contraseña actualizada')));
     }
@@ -368,7 +314,7 @@ class CuentaPantalla extends ConsumerWidget {
                     leading: const Icon(Icons.lock_outline_rounded),
                     title: const Text('Cambiar contraseña'),
                     trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _cambiarContrasena(context, ref),
+                    onTap: () => _cambiarContrasena(context),
                   ),
                   ListTile(
                     leading: const Icon(Icons.privacy_tip_outlined),
@@ -424,6 +370,81 @@ class CuentaPantalla extends ConsumerWidget {
   }
 }
 
+class _DialogoContrasena extends ConsumerStatefulWidget {
+  const _DialogoContrasena();
+
+  @override
+  ConsumerState<_DialogoContrasena> createState() => _DialogoContrasenaState();
+}
+
+class _DialogoContrasenaState extends ConsumerState<_DialogoContrasena> {
+  final _actual = TextEditingController();
+  final _nueva = TextEditingController();
+  final _repetida = TextEditingController();
+  String? _error;
+  bool _guardando = false;
+
+  @override
+  void dispose() {
+    _actual.dispose();
+    _nueva.dispose();
+    _repetida.dispose();
+    super.dispose();
+  }
+
+  Future<void> _guardar() async {
+    if (_nueva.text != _repetida.text) {
+      setState(() => _error = 'Las contraseñas no coinciden');
+      return;
+    }
+    setState(() => _guardando = true);
+    try {
+      await ref.read(authProvider.notifier).cambiarContrasena(actual: _actual.text, nueva: _nueva.text);
+      if (mounted) Navigator.pop(context, true);
+    } on ErrorAuth catch (e) {
+      setState(() {
+        _error = e.mensaje;
+        _guardando = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Cambiar contraseña'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _actual,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Contraseña actual'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _nueva,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Nueva contraseña', helperText: 'Mínimo 6 caracteres'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _repetida,
+              obscureText: true,
+              decoration: InputDecoration(labelText: 'Repite la nueva contraseña', errorText: _error),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+        FilledButton(onPressed: _guardando ? null : _guardar, child: const Text('Guardar')),
+      ],
+    );
+  }
+}
+
 class _TarjetaServidor extends ConsumerStatefulWidget {
   const _TarjetaServidor();
 
@@ -447,35 +468,10 @@ class _TarjetaServidorState extends ConsumerState<_TarjetaServidor> {
   }
 
   Future<void> _editar() async {
-    final ctrl = TextEditingController(text: ref.read(ajustesProvider).urlServidor);
     final nueva = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Dirección del servidor'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: ctrl,
-              keyboardType: TextInputType.url,
-              autocorrect: false,
-              decoration: const InputDecoration(hintText: 'http://192.168.1.50:8000'),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Emulador Android: http://10.0.2.2:8000\nTeléfono físico: la IP local de tu PC en la misma red Wi-Fi.',
-              style: context.textos.bodySmall,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, ctrl.text), child: const Text('Guardar')),
-        ],
-      ),
+      builder: (_) => _DialogoServidor(inicial: ref.read(ajustesProvider).urlServidor),
     );
-    ctrl.dispose();
     if (nueva == null) return;
     await ref.read(ajustesProvider.notifier).cambiarUrlServidor(nueva);
     setState(() => _estado = null);
@@ -550,6 +546,52 @@ class _TarjetaServidorState extends ConsumerState<_TarjetaServidor> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DialogoServidor extends StatefulWidget {
+  final String inicial;
+  const _DialogoServidor({required this.inicial});
+
+  @override
+  State<_DialogoServidor> createState() => _DialogoServidorState();
+}
+
+class _DialogoServidorState extends State<_DialogoServidor> {
+  late final _ctrl = TextEditingController(text: widget.inicial);
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Dirección del servidor'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _ctrl,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            decoration: const InputDecoration(hintText: 'http://192.168.1.50:8000'),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Emulador Android: http://10.0.2.2:8000\nTeléfono físico: la IP local de tu PC en la misma red Wi-Fi.',
+            style: context.textos.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(onPressed: () => Navigator.pop(context, _ctrl.text), child: const Text('Guardar')),
+      ],
     );
   }
 }

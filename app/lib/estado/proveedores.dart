@@ -354,7 +354,10 @@ class HistorialNotifier extends AsyncNotifier<List<Sesion>> {
   /// deshacer. Si no se deshace, se llama a [borrarAdjuntos].
   Future<void> ocultar(Sesion sesion) async {
     await ref.read(historialServicioProvider).eliminar(sesion.usuario, sesion.id);
-    state = AsyncData([for (final s in state.value ?? const <Sesion>[]) if (s.id != sesion.id) s]);
+    state = AsyncData([
+      for (final s in state.value ?? const <Sesion>[])
+        if (s.id != sesion.id) s,
+    ]);
   }
 
   Future<void> borrarAdjuntos(Sesion sesion) =>

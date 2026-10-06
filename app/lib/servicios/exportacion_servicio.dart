@@ -329,7 +329,7 @@ class ExportacionServicio {
                   [
                     _fecha(e.fecha),
                     '${e.repeticiones ?? 0}',
-                    e.umbralReferencia == null ? '—' : '≥ ${e.umbralReferencia}',
+                    e.umbralReferencia == null ? '—' : '${e.umbralReferencia} o más',
                     (e.clasificacion ?? ClasificacionSts30.sinReferencia).etiqueta,
                   ],
               ],

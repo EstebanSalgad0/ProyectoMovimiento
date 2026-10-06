@@ -7,6 +7,7 @@ import '../../core/tema/tema.dart';
 import '../../core/widgets/anillo_puntaje.dart';
 import '../../core/widgets/boton_principal.dart';
 import '../../core/widgets/ilustracion_ejercicio.dart';
+import '../../core/widgets/logo.dart';
 import '../../estado/proveedores.dart';
 
 class _Pagina {
@@ -118,7 +119,7 @@ class _BienvenidaPantallaState extends ConsumerState<BienvenidaPantalla> {
                       padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
                       child: Row(
                         children: [
-                          const Icon(Icons.accessibility_new_rounded, color: AppColores.blanco),
+                          const LogoMovimiento(tamano: 30),
                           const SizedBox(width: 8),
                           Text(
                             AppConfig.nombreApp,

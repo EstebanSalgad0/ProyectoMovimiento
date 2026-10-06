@@ -6,6 +6,7 @@ import '../../core/config/app_config.dart';
 import '../../core/tema/colores.dart';
 import '../../core/tema/tema.dart';
 import '../../core/widgets/boton_principal.dart';
+import '../../core/widgets/logo.dart';
 import '../../core/widgets/ilustracion_ejercicio.dart';
 import '../../core/widgets/tarjeta.dart';
 import '../../estado/proveedores.dart';
@@ -80,15 +81,12 @@ class _LoginPantallaState extends ConsumerState<LoginPantalla> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 56,
-                              height: 56,
+                            DecoratedBox(
                               decoration: BoxDecoration(
-                                color: AppColores.blanco.withValues(alpha: 0.16),
                                 borderRadius: BorderRadius.circular(18),
-                                border: Border.all(color: AppColores.blanco.withValues(alpha: 0.3)),
+                                border: Border.all(color: AppColores.blanco.withValues(alpha: 0.35), width: 1.5),
                               ),
-                              child: const Icon(Icons.accessibility_new_rounded, color: AppColores.blanco, size: 30),
+                              child: const LogoMovimiento(tamano: 60),
                             ),
                             const SizedBox(height: 20),
                             Text(

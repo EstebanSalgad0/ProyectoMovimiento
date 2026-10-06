@@ -45,7 +45,7 @@ para un profesional.
       ajustar umbrales en `compartido/ejercicios.json` (y su copia en `app/assets/especificacion/`).
 - [ ] Grabar 5–10 videos por ejercicio (correctos y con errores típicos) para pruebas de regresión.
 - [ ] Definir identidad: nombre, `applicationId`/bundle id, ícono y pantalla de inicio.
-- [ ] Agregar CI (GitHub Actions): `flutter analyze`, `flutter test`, `pytest` en cada PR.
+- [x] Agregar CI (GitHub Actions): `flutter analyze`, `flutter test`, `pytest` en cada PR (`.github/workflows/ci.yml`).
 
 ### Criterios de aceptación
 - ≥ 15 cuadros/s de detección en un Android de gama media; aviso de corrección < 300 ms después de terminar la repetición.
@@ -151,5 +151,5 @@ para un profesional.
 1. Probar esta rama en un teléfono real (ver "Cómo probar" en el README) y anotar cualquier problema de cámara.
 2. Sesión de calibración con un kinesiólogo usando la herramienta de webcam y ajustar `ejercicios.json`.
 3. Definir nombre, identificador e ícono definitivos de la app.
-4. Agregar CI en GitHub Actions.
+4. Abrir un PR de esta rama hacia `main` para que corra la CI y revisar los cambios juntos.
 5. Decidir el stack del backend (FastAPI + PostgreSQL propio, o un servicio gestionado) para iniciar la Fase 2.

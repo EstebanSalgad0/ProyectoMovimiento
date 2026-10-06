@@ -100,11 +100,17 @@ class ControladorTiempoReal extends ChangeNotifier {
     };
   }
 
+  /// Notifica solo si la pantalla sigue abierta (hay esperas asíncronas de la
+  /// cámara que pueden terminar después de cerrar).
+  void _notificar() {
+    if (!_cerrado) notifyListeners();
+  }
+
   // ------------------------------------------------------------------ cámara
   Future<void> iniciar() async {
     etapa = EtapaSesion.iniciando;
     mensajeError = null;
-    notifyListeners();
+    _notificar();
     try {
       _camaras = await availableCameras();
     } on CameraException catch (e) {
@@ -113,7 +119,7 @@ class ControladorTiempoReal extends ChangeNotifier {
     }
     if (_camaras.isEmpty) {
       etapa = EtapaSesion.sinCamara;
-      notifyListeners();
+      _notificar();
       return;
     }
     final preferida = preferirFrontal ? CameraLensDirection.front : CameraLensDirection.back;
@@ -123,7 +129,7 @@ class ControladorTiempoReal extends ChangeNotifier {
   Future<void> _abrir(CameraDescription descripcion) async {
     final anterior = camara;
     camara = null;
-    notifyListeners();
+    _notificar();
     await _cerrarCamara(anterior);
 
     final c = CameraController(
@@ -150,14 +156,14 @@ class ControladorTiempoReal extends ChangeNotifier {
       _fallar(e);
       return;
     }
-    notifyListeners();
+    _notificar();
   }
 
   void _fallar(CameraException e) {
     const sinPermiso = {'CameraAccessDenied', 'CameraAccessDeniedWithoutPrompt', 'CameraAccessRestricted'};
     etapa = sinPermiso.contains(e.code) ? EtapaSesion.sinPermiso : EtapaSesion.error;
     mensajeError = e.description ?? e.code;
-    notifyListeners();
+    _notificar();
   }
 
   Future<void> _cerrarCamara(CameraController? c) async {
@@ -179,7 +185,7 @@ class ControladorTiempoReal extends ChangeNotifier {
     final c = camara;
     camara = null;
     reloj.stop();
-    notifyListeners();
+    _notificar();
     await _cerrarCamara(c);
   }
 
@@ -261,7 +267,7 @@ class ControladorTiempoReal extends ChangeNotifier {
         fotograma = Fotograma(tMs, imagen: lista);
       }
       _alFotograma(fotograma);
-      notifyListeners();
+      _notificar();
     } catch (e) {
       debugPrint('Error de detección: $e');
     } finally {
@@ -316,9 +322,9 @@ class ControladorTiempoReal extends ChangeNotifier {
         t.cancel();
         _comenzar();
       }
-      notifyListeners();
+      _notificar();
     });
-    notifyListeners();
+    _notificar();
   }
 
   /// Omite la espera de encuadre y empieza de inmediato.
@@ -335,7 +341,7 @@ class ControladorTiempoReal extends ChangeNotifier {
       ..start();
     _avisar(AvisoEnVivo('¡Comienza!', detalle: '${ejercicio.objetivoRepeticiones} repeticiones como objetivo'));
     _hablar('Comienza', prioritario: true);
-    notifyListeners();
+    _notificar();
   }
 
   void _alRepeticion(RepeticionEvaluada rep) {
@@ -371,14 +377,14 @@ class ControladorTiempoReal extends ChangeNotifier {
   void alternarVoz() {
     vozActiva = !vozActiva;
     if (!vozActiva) voz.detener();
-    notifyListeners();
+    _notificar();
   }
 
   /// Detiene la cámara y devuelve el resultado (null si no hubo sesión activa).
   Future<ResultadoAnalisis?> finalizar() async {
     etapa = EtapaSesion.finalizando;
     reloj.stop();
-    notifyListeners();
+    _notificar();
     _temporizador?.cancel();
     final c = camara;
     camara = null;

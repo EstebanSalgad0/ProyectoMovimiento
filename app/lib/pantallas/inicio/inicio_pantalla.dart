@@ -6,15 +6,20 @@ import '../../core/config/app_config.dart';
 import '../../core/tema/colores.dart';
 import '../../core/tema/tema.dart';
 import '../../core/utils/formato.dart';
-import '../../core/utils/presentacion.dart';
+import '../../core/tema/tipografia.dart';
+import '../../core/widgets/avatar.dart';
 import '../../core/widgets/estadistica.dart';
-import '../../core/widgets/ilustracion_ejercicio.dart';
 import '../../core/widgets/item_sesion.dart';
 import '../../core/widgets/tarjeta.dart';
 import '../../estado/proveedores.dart';
+import '../../modelos/evaluacion.dart';
+import '../../modelos/logros.dart';
+import '../../modelos/recomendaciones.dart';
+import '../../modelos/rutina.dart';
 import '../../modelos/sesion.dart';
 import '../../rutas.dart';
 import '../ejercicios/selector_ejercicio.dart';
+import '../rutinas/lista_rutinas.dart';
 
 class InicioPantalla extends ConsumerWidget {
   const InicioPantalla({super.key});
@@ -30,8 +35,20 @@ class InicioPantalla extends ConsumerWidget {
     final usuario = ref.watch(authProvider);
     final historial = ref.watch(historialProvider);
     final sesiones = historial.value ?? const <Sesion>[];
+    final evaluaciones = ref.watch(evaluacionesProvider).value ?? const <EvaluacionFuncional>[];
     final resumen = Resumen.desde(sesiones);
-    final ejercicios = ref.watch(especificacionProvider).ejercicios;
+    final spec = ref.watch(especificacionProvider);
+    final fechas = [...sesiones.map((s) => s.fecha), ...evaluaciones.map((e) => e.fecha)];
+    final recomendaciones = generarRecomendaciones(
+      usuario: usuario,
+      sesiones: sesiones,
+      evaluaciones: evaluaciones,
+      nombreEjercicio: (id) => spec.buscar(id)?.nombre ?? id,
+    );
+    final sugerida = buscarRutina(
+      ref.watch(todasLasRutinasProvider),
+      idRutinaSugerida(usuario?.objetivo, usuario?.edad),
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -54,29 +71,99 @@ class InicioPantalla extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  Semantics(
-                    button: true,
-                    label: 'Ir a mi cuenta',
-                    child: InkWell(
-                      onTap: () => context.go(Rutas.cuenta),
-                      customBorder: const CircleBorder(),
-                      child: CircleAvatar(
-                        radius: 24,
-                        backgroundColor: p.primarioSuave,
-                        child: Text(
-                          usuario?.iniciales ?? '?',
-                          style: context.textos.titleSmall?.copyWith(color: p.primario),
-                        ),
+                  if (usuario != null)
+                    Semantics(
+                      button: true,
+                      label: 'Ir a mi cuenta',
+                      child: InkWell(
+                        onTap: () => context.go(Rutas.cuenta),
+                        customBorder: const CircleBorder(),
+                        child: AvatarUsuario(usuario: usuario, tamano: 48),
                       ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              if (usuario != null && !usuario.perfilCompleto) ...[
+                _AvisoPerfil(avance: usuario.avancePerfil),
+                const SizedBox(height: 14),
+              ],
+
+              _MetaSemanal(fechas: fechas, meta: usuario?.metaSemanal ?? 3, racha: resumen.racha),
+              const SizedBox(height: 14),
+
+              // Accesos rápidos
+              Row(
+                children: [
+                  Expanded(
+                    child: _Acceso(
+                      icono: Icons.videocam_rounded,
+                      titulo: 'Entrenar en vivo',
+                      detalle: 'Correcciones al instante',
+                      color: p.primario,
+                      fondo: p.primarioSuave,
+                      onTap: () => _entrenar(context),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _Acceso(
+                      icono: Icons.playlist_play_rounded,
+                      titulo: 'Rutinas',
+                      detalle: 'Series y descansos guiados',
+                      color: p.acento,
+                      fondo: p.acentoSuave,
+                      onTap: () => context.go(Rutas.entrenarEn('rutinas')),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _Acceso(
+                      icono: Icons.video_library_rounded,
+                      titulo: 'Analizar video',
+                      detalle: 'Desde la galería o grabando',
+                      color: p.info,
+                      fondo: p.infoSuave,
+                      onTap: () => context.push(Rutas.preparacion),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _Acceso(
+                      icono: Icons.monitor_heart_outlined,
+                      titulo: 'Evaluarme',
+                      detalle: 'Prueba 30 s y goniómetro',
+                      color: p.advertencia,
+                      fondo: p.advertenciaSuave,
+                      onTap: () => context.go(Rutas.entrenarEn('evaluaciones')),
+                    ),
+                  ),
+                ],
+              ),
 
-              // Tarjeta principal
-              _TarjetaEntrenar(onTiempoReal: () => _entrenar(context), onVideo: () => context.push(Rutas.preparacion)),
-              const SizedBox(height: 16),
+              if (recomendaciones.isNotEmpty) ...[
+                const SizedBox(height: 26),
+                const EncabezadoSeccion(titulo: 'Para ti'),
+                for (final r in recomendaciones) ...[
+                  _TarjetaRecomendacion(recomendacion: r),
+                  const SizedBox(height: 10),
+                ],
+              ],
+
+              if (sugerida != null) ...[
+                const SizedBox(height: 16),
+                EncabezadoSeccion(
+                  titulo: 'Rutina sugerida',
+                  accion: 'Ver rutinas',
+                  onAccion: () => context.go(Rutas.entrenarEn('rutinas')),
+                ),
+                TarjetaRutina(rutina: sugerida),
+              ],
+              const SizedBox(height: 26),
 
               // Indicadores
               Row(
@@ -85,7 +172,7 @@ class InicioPantalla extends ConsumerWidget {
                     child: TileEstadistica(
                       icono: Icons.calendar_today_rounded,
                       valor: '${resumen.sesionesSemana}',
-                      etiqueta: 'Esta semana',
+                      etiqueta: 'Últimos 7 días',
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -101,69 +188,14 @@ class InicioPantalla extends ConsumerWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: TileEstadistica(
-                      icono: Icons.local_fire_department_rounded,
-                      valor: '${resumen.racha}',
-                      etiqueta: resumen.racha == 1 ? 'Día de racha' : 'Días de racha',
-                      color: p.advertencia,
-                      fondo: p.advertenciaSuave,
+                      icono: Icons.repeat_rounded,
+                      valor: '${resumen.repeticiones}',
+                      etiqueta: 'Repeticiones',
+                      color: p.info,
+                      fondo: p.infoSuave,
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              _TuSemana(porDia: resumen.sesionesPorDia),
-              const SizedBox(height: 26),
-
-              EncabezadoSeccion(
-                titulo: 'Ejercicios',
-                accion: 'Ver todos',
-                onAccion: () => context.go(Rutas.ejercicios),
-              ),
-              SizedBox(
-                height: 176,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  clipBehavior: Clip.none,
-                  itemCount: ejercicios.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 12),
-                  itemBuilder: (context, i) {
-                    final e = ejercicios[i];
-                    return SizedBox(
-                      width: 140,
-                      child: Tarjeta(
-                        padding: EdgeInsets.zero,
-                        onTap: () => context.push(Rutas.ejercicio(e.id)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(Medidas.radioL)),
-                                child: IlustracionEjercicio(ejercicioId: e.id),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    e.nombre,
-                                    style: context.textos.titleSmall,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(Presentacion.categoria(e.categoria), style: context.textos.bodySmall),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
               ),
               const SizedBox(height: 26),
 
@@ -214,101 +246,163 @@ class InicioPantalla extends ConsumerWidget {
   }
 }
 
-class _TarjetaEntrenar extends StatelessWidget {
-  final VoidCallback onTiempoReal;
-  final VoidCallback onVideo;
-
-  const _TarjetaEntrenar({required this.onTiempoReal, required this.onVideo});
+class _AvisoPerfil extends StatelessWidget {
+  final double avance;
+  const _AvisoPerfil({required this.avance});
 
   @override
   Widget build(BuildContext context) {
     final p = context.paleta;
+    return Tarjeta(
+      onTap: () => context.push(Rutas.perfil),
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+      color: p.primarioSuave,
+      colorBorde: p.primarioSuave,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 36,
+            height: 36,
+            child: CircularProgressIndicator(value: avance, strokeWidth: 4, backgroundColor: p.superficie),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Completa tu perfil', style: context.textos.titleSmall?.copyWith(color: p.primario)),
+                Text('Tu edad, sexo y objetivo ajustan rutinas y referencias.', style: context.textos.bodySmall),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: p.primario),
+        ],
+      ),
+    );
+  }
+}
+
+/// Anillo con los días entrenados esta semana frente a la meta, y los días
+/// de lunes a domingo.
+class _MetaSemanal extends StatelessWidget {
+  final List<DateTime> fechas;
+  final int meta;
+  final int racha;
+
+  const _MetaSemanal({required this.fechas, required this.meta, required this.racha});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.paleta;
+    final hoy = DateTime.now();
+    final lunes = inicioSemana(hoy);
+    final activos = diasActivosSemana(fechas, hoy: hoy);
+    final dias = {for (final f in fechas) soloDia(f)};
+    final cumplida = activos >= meta;
     return Container(
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(gradient: p.gradiente, borderRadius: BorderRadius.circular(Medidas.radioXL)),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SizedBox(
+                width: 88,
+                height: 88,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox.expand(
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(end: (activos / meta).clamp(0.0, 1.0)),
+                        duration: const Duration(milliseconds: 700),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, v, _) => CircularProgressIndicator(
+                          value: v,
+                          strokeWidth: 9,
+                          strokeCap: StrokeCap.round,
+                          color: AppColores.blanco,
+                          backgroundColor: AppColores.blanco.withValues(alpha: 0.2),
+                        ),
+                      ),
+                    ),
+                    cumplida
+                        ? const Icon(Icons.emoji_events_rounded, color: AppColores.blanco, size: 36)
+                        : Text('$activos/$meta', style: AppTipo.numero(22, AppColores.blanco)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 18),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: AppColores.blanco.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(40),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.bolt_rounded, size: 14, color: AppColores.blanco),
-                          const SizedBox(width: 4),
-                          Text(
-                            'IA en tu teléfono',
-                            style: context.textos.labelSmall?.copyWith(color: AppColores.blanco),
-                          ),
-                        ],
+                    Text(
+                      'META SEMANAL',
+                      style: context.textos.labelSmall?.copyWith(
+                        color: AppColores.blanco.withValues(alpha: 0.8),
+                        letterSpacing: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
                     Text(
-                      'Entrena con correcciones al instante',
+                      cumplida ? '¡Meta cumplida!' : '${Formato.plural(activos, 'día', 'días')} de $meta',
                       style: context.textos.titleLarge?.copyWith(color: AppColores.blanco),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Cuenta tus repeticiones y evalúa tu técnica con la cámara.',
-                      style: context.textos.bodySmall?.copyWith(color: AppColores.blanco.withValues(alpha: 0.85)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.local_fire_department_rounded, size: 16, color: Color(0xFFFFC56B)),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            racha == 0 ? 'Empieza tu racha hoy' : 'Racha de ${Formato.plural(racha, 'día', 'días')}',
+                            style: context.textos.bodySmall?.copyWith(color: AppColores.blanco.withValues(alpha: 0.9)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(
-                width: 86,
-                height: 120,
-                child: IlustracionEjercicio(
-                  ejercicioId: 'sentadilla',
-                  animada: true,
-                  conFondo: false,
-                  color: AppColores.blanco,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                flex: 3,
-                child: FilledButton.icon(
-                  onPressed: onTiempoReal,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColores.blanco,
-                    foregroundColor: AppColores.marino,
-                    minimumSize: const Size(0, 48),
-                  ),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Comenzar'),
+              for (var i = 0; i < 7; i++)
+                Builder(
+                  builder: (context) {
+                    final d = lunes.add(Duration(days: i));
+                    final activo = dias.contains(d);
+                    final esHoy = d == soloDia(hoy);
+                    return Column(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: activo ? AppColores.blanco : AppColores.blanco.withValues(alpha: 0.12),
+                            border: esHoy ? Border.all(color: AppColores.blanco, width: 2) : null,
+                          ),
+                          child: activo ? Icon(Icons.check_rounded, size: 18, color: p.gradienteHero.first) : null,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          Formato.inicialDia(d),
+                          style: context.textos.labelSmall?.copyWith(
+                            color: AppColores.blanco.withValues(alpha: esHoy ? 1 : 0.75),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: OutlinedButton.icon(
-                  onPressed: onVideo,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColores.blanco,
-                    side: BorderSide(color: AppColores.blanco.withValues(alpha: 0.5)),
-                    minimumSize: const Size(0, 48),
-                  ),
-                  icon: const Icon(Icons.video_library_outlined, size: 19),
-                  label: const Text('Video'),
-                ),
-              ),
             ],
           ),
         ],
@@ -317,67 +411,84 @@ class _TarjetaEntrenar extends StatelessWidget {
   }
 }
 
-class _TuSemana extends StatelessWidget {
-  final List<int> porDia;
-  const _TuSemana({required this.porDia});
+class _Acceso extends StatelessWidget {
+  final IconData icono;
+  final String titulo;
+  final String detalle;
+  final Color color;
+  final Color fondo;
+  final VoidCallback onTap;
+
+  const _Acceso({
+    required this.icono,
+    required this.titulo,
+    required this.detalle,
+    required this.color,
+    required this.fondo,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tarjeta(
+      onTap: onTap,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconoCaja(icono: icono, color: color, fondo: fondo, tamano: 40),
+          const SizedBox(height: 12),
+          Text(titulo, style: context.textos.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 2),
+          Text(detalle, style: context.textos.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _TarjetaRecomendacion extends StatelessWidget {
+  final Recomendacion recomendacion;
+  const _TarjetaRecomendacion({required this.recomendacion});
 
   @override
   Widget build(BuildContext context) {
     final p = context.paleta;
-    final hoy = DateTime.now();
-    final maximo = porDia.fold<int>(1, (m, v) => v > m ? v : m);
+    final r = recomendacion;
+    final (icono, color, fondo) = switch (r.tipo) {
+      TipoRecomendacion.dolorIntenso => (Icons.health_and_safety_rounded, p.peligro, p.peligroSuave),
+      TipoRecomendacion.dolorModerado => (Icons.healing_rounded, p.advertencia, p.advertenciaSuave),
+      TipoRecomendacion.correccion => (Icons.tips_and_updates_rounded, p.primario, p.primarioSuave),
+      TipoRecomendacion.evaluacion => (Icons.monitor_heart_outlined, p.acento, p.acentoSuave),
+      TipoRecomendacion.meta => (Icons.flag_rounded, p.info, p.infoSuave),
+      TipoRecomendacion.metaCumplida => (Icons.celebration_rounded, p.exito, p.exitoSuave),
+    };
+    final VoidCallback? accion = switch (r.tipo) {
+      TipoRecomendacion.correccion when r.ejercicioId != null => () => context.push(Rutas.ejercicio(r.ejercicioId!)),
+      TipoRecomendacion.evaluacion => () => context.go(Rutas.entrenarEn('evaluaciones')),
+      TipoRecomendacion.meta => () => context.go(Rutas.entrenarEn('rutinas')),
+      _ => null,
+    };
     return Tarjeta(
-      child: Column(
+      onTap: accion,
+      padding: const EdgeInsets.all(14),
+      colorBorde: r.tipo == TipoRecomendacion.dolorIntenso ? p.peligro.withValues(alpha: 0.5) : null,
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text('Tu semana', style: context.textos.titleSmall),
-              const Spacer(),
-              Text(
-                Formato.plural(porDia.reduce((a, b) => a + b), 'sesión', 'sesiones'),
-                style: context.textos.bodySmall,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 108,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          IconoCaja(icono: icono, color: color, fondo: fondo, tamano: 40),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (var i = 0; i < 7; i++)
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (porDia[i] > 0)
-                          Text('${porDia[i]}', style: context.textos.labelSmall?.copyWith(color: p.textoSecundario)),
-                        const SizedBox(height: 4),
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 500),
-                          curve: Curves.easeOutCubic,
-                          width: 22,
-                          height: 8 + 44 * (porDia[i] / maximo),
-                          decoration: BoxDecoration(
-                            color: porDia[i] > 0
-                                ? (i == 6 ? p.primario : p.primario.withValues(alpha: 0.45))
-                                : p.superficieAlta,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          Formato.inicialDia(hoy.subtract(Duration(days: 6 - i))),
-                          style: context.textos.labelSmall?.copyWith(color: i == 6 ? p.primario : p.textoTerciario),
-                        ),
-                      ],
-                    ),
-                  ),
+                Text(r.titulo, style: context.textos.titleSmall),
+                const SizedBox(height: 2),
+                Text(r.detalle, style: context.textos.bodySmall),
               ],
             ),
           ),
+          if (accion != null) ...[const SizedBox(width: 6), Icon(Icons.chevron_right_rounded, color: p.textoTerciario)],
         ],
       ),
     );

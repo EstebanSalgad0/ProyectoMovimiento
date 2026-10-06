@@ -10,6 +10,7 @@ import '../../core/utils/presentacion.dart';
 import '../../core/widgets/anillo_puntaje.dart';
 import '../../core/widgets/boton_principal.dart';
 import '../../core/widgets/estadistica.dart';
+import '../../core/widgets/hoja_sensaciones.dart';
 import '../../core/widgets/insignia_estado.dart';
 import '../../core/widgets/tarjeta.dart';
 import '../../estado/proveedores.dart';
@@ -70,6 +71,28 @@ class ResultadoPantalla extends ConsumerWidget {
 
     void salir() => esNueva ? context.go(Rutas.inicio) : context.pop();
 
+    Future<void> registrarSensaciones() async {
+      final nuevas = await mostrarHojaSensaciones(context, inicial: s.sensaciones);
+      if (nuevas != null) await ref.read(historialProvider.notifier).guardarSensaciones([s.id], nuevas);
+    }
+
+    Future<void> eliminar() async {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('¿Eliminar esta sesión?'),
+          content: const Text('Se borrará del historial junto con su grabación.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      await ref.read(historialProvider.notifier).eliminar(s);
+      if (context.mounted) salir();
+    }
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -78,6 +101,24 @@ class ResultadoPantalla extends ConsumerWidget {
           onPressed: salir,
         ),
         title: Text(esNueva ? 'Tu resultado' : 'Detalle de sesión'),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Más opciones',
+            onSelected: (v) {
+              if (v == 'eliminar') eliminar();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'eliminar',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline_rounded),
+                  title: Text('Eliminar sesión'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(Medidas.margen, 4, Medidas.margen, 28),
@@ -119,11 +160,32 @@ class ResultadoPantalla extends ConsumerWidget {
                     ),
                     ChipDato(texto: Formato.fechaRelativa(s.fecha), icono: Icons.schedule_rounded),
                     if (anterior != null) _ChipComparacion(diferencia: s.puntaje - anterior.puntaje),
+                    if (s.rutina != null)
+                      GestureDetector(
+                        onTap: () => context.push(Rutas.ejecucion(s.rutina!.ejecucionId)),
+                        child: ChipDato(
+                          texto: '${s.rutina!.rutinaNombre} · serie ${s.rutina!.serie}/${s.rutina!.totalSeries}',
+                          icono: Icons.playlist_play_rounded,
+                          color: p.acento,
+                          fondo: p.acentoSuave,
+                        ),
+                      ),
                   ],
                 ),
+                if (s.tieneEsqueleto || s.videoRuta != null) ...[
+                  const SizedBox(height: 16),
+                  BotonPrincipal(
+                    texto: s.videoRuta != null ? 'Ver video con esqueleto' : 'Revisar movimiento',
+                    icono: Icons.slow_motion_video_rounded,
+                    variante: VarianteBoton.suave,
+                    onPressed: () => context.push(Rutas.revision(s.id)),
+                  ),
+                ],
               ],
             ),
           ),
+          const SizedBox(height: 14),
+          TarjetaSensaciones(sensaciones: s.sensaciones, onEditar: registrarSensaciones),
           const SizedBox(height: 14),
 
           // Indicadores

@@ -16,6 +16,7 @@ import '../../core/widgets/tarjeta.dart';
 import '../../estado/proveedores.dart';
 import '../../modelos/sesion.dart';
 import '../../rutas.dart';
+import '../../motor/especificacion.dart';
 import '../../servicios/servicio_ia.dart';
 
 class SolicitudAnalisis {
@@ -77,6 +78,7 @@ class _AnalizandoPantallaState extends ConsumerState<AnalizandoPantalla> {
           .analizarVideo(
             video: widget.solicitud.video,
             ejercicio: widget.solicitud.ejercicio,
+            ajustes: _ajustesDelEjercicio(),
             cancelar: cancelar,
             onProgreso: (v) {
               if (!mounted) return;
@@ -88,7 +90,12 @@ class _AnalizandoPantallaState extends ConsumerState<AnalizandoPantalla> {
           );
       final sesion = await ref
           .read(historialProvider.notifier)
-          .registrar(resultado, OrigenSesion.video, videoNombre: widget.solicitud.video.uri.pathSegments.last);
+          .registrar(
+            resultado,
+            OrigenSesion.video,
+            videoNombre: widget.solicitud.video.uri.pathSegments.last,
+            video: ref.read(ajustesProvider).guardarVideos ? widget.solicitud.video : null,
+          );
       if (mounted) context.pushReplacement(Rutas.sesion(sesion.id, nueva: true), extra: sesion);
     } on ErrorAnalisis catch (e) {
       if (e.tipo == TipoErrorAnalisis.cancelado || !mounted) return;
@@ -110,6 +117,13 @@ class _AnalizandoPantallaState extends ConsumerState<AnalizandoPantalla> {
   void _cancelarYVolver() {
     _cancelar?.cancel();
     context.pop();
+  }
+
+  /// Objetivos personales del ejercicio, para que el servidor los aplique.
+  Map<String, dynamic>? _ajustesDelEjercicio() {
+    final propios = ref.read(objetivosProvider)[widget.solicitud.ejercicio];
+    if (propios == null || propios.isEmpty) return null;
+    return ajustesAJson({widget.solicitud.ejercicio: propios});
   }
 
   @override

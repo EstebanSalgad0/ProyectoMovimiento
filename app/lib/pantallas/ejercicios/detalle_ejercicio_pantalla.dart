@@ -10,7 +10,9 @@ import '../../core/widgets/ilustracion_ejercicio.dart';
 import '../../core/widgets/tarjeta.dart';
 import '../../estado/proveedores.dart';
 import '../../modelos/resultado_analisis.dart';
+import '../../motor/especificacion.dart';
 import '../../rutas.dart';
+import 'hoja_objetivos.dart';
 
 class DetalleEjercicioPantalla extends ConsumerWidget {
   final String ejercicioId;
@@ -28,6 +30,7 @@ class DetalleEjercicioPantalla extends ConsumerWidget {
       );
     }
     final soloVista = e.verificaciones.where((v) => v.vistas != null).isNotEmpty;
+    final ajustes = ref.watch(objetivosProvider)[e.id] ?? const {};
 
     return Scaffold(
       body: CustomScrollView(
@@ -150,7 +153,11 @@ class DetalleEjercicioPantalla extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
 
-                const EncabezadoSeccion(titulo: 'Qué detecta la IA'),
+                EncabezadoSeccion(
+                  titulo: 'Qué detecta la IA',
+                  accion: 'Personalizar',
+                  onAccion: () => mostrarHojaObjetivos(context, e.id),
+                ),
                 Tarjeta(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Column(
@@ -162,7 +169,18 @@ class DetalleEjercicioPantalla extends ConsumerWidget {
                           subtitle: v.vistas == null
                               ? null
                               : Text('Solo ${Presentacion.vista(v.vistas!.first).toLowerCase()}'),
-                          trailing: _PuntoSeveridad(severidad: Severidad.desde(v.severidad)),
+                          trailing: switch (ajustes[v.codigo]) {
+                            AjusteVerificacion(activa: false) => ChipDato(
+                              texto: 'Desactivada',
+                              color: p.textoTerciario,
+                            ),
+                            AjusteVerificacion(umbral: final u?) => ChipDato(
+                              texto: 'Mi objetivo: ${formatoUmbral(u, v.rangoAjuste)}',
+                              color: p.primario,
+                              fondo: p.primarioSuave,
+                            ),
+                            _ => _PuntoSeveridad(severidad: Severidad.desde(v.severidad)),
+                          },
                         ),
                     ],
                   ),

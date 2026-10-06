@@ -57,7 +57,30 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Crear cuenta'));
     await avanzar(tester);
 
+    // Configuración inicial del perfil
+    expect(find.text('Configura tu perfil'), findsOneWidget);
+    expect(find.text('¡Hola, Ana!'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Femenino'));
+    await tester.scrollUntilVisible(find.text('Fuerza'), 300, scrollable: _listaPrincipal);
+    await tester.tap(find.text('Fuerza'));
+    await tester.scrollUntilVisible(find.text('Continuar'), 400, scrollable: _listaPrincipal);
+    await tester.tap(find.text('Continuar'));
+    await avanzar(tester);
+
     expect(find.text('Ana'), findsOneWidget);
+    expect(find.text('META SEMANAL'), findsOneWidget);
+  });
+
+  testWidgets('la configuración inicial se puede omitir', (tester) async {
+    await montarApp(
+      tester,
+      preferencias: {..._sesionIniciada, 'perfil.pendiente.usuario.prueba': true},
+    );
+    expect(find.text('Configura tu perfil'), findsOneWidget);
+    await tester.tap(find.text('Omitir'));
+    await avanzar(tester);
+    expect(find.text('Usuario'), findsOneWidget);
+    expect(find.text('Completa tu perfil'), findsOneWidget);
   });
 
   testWidgets('inicio muestra la actividad reciente y abre el resultado', (tester) async {
@@ -82,8 +105,10 @@ void main() {
 
   testWidgets('catálogo lista los 6 ejercicios y abre el detalle', (tester) async {
     await montarApp(tester, preferencias: _sesionIniciada);
-    await tester.tap(find.text('Ejercicios').last);
+    await tester.tap(find.text('Entrenar').last);
     await avanzar(tester);
+    expect(find.text('Rutinas'), findsOneWidget);
+    expect(find.text('Evaluaciones'), findsOneWidget);
 
     expect(find.text('6 movimientos con análisis de técnica'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'press');
@@ -120,9 +145,10 @@ void main() {
     await avanzar(tester);
     expect(find.text('Usuario Prueba'), findsOneWidget);
 
+    await tester.scrollUntilVisible(find.text('Oscuro'), 300, scrollable: _listaPrincipal);
     await tester.tap(find.text('Oscuro'));
     await avanzar(tester, 4);
-    expect(Theme.of(tester.element(find.text('Usuario Prueba'))).brightness, Brightness.dark);
+    expect(Theme.of(tester.element(find.text('Oscuro'))).brightness, Brightness.dark);
 
     // Al final de la lista, para que la barra de navegación no tape el botón.
     await tester.drag(_listaPrincipal, const Offset(0, -3000));

@@ -27,6 +27,13 @@ abstract class RepositorioAuth {
     required RolUsuario rol,
   });
   Future<void> cerrarSesion();
+
+  /// Guarda los datos del perfil (no cambia usuario ni contraseña).
+  Future<Usuario> actualizarPerfil(Usuario usuario);
+  Future<void> cambiarContrasena({required String actual, required String nueva});
+
+  /// Elimina la cuenta tras confirmar la contraseña.
+  Future<void> eliminarCuenta(String contrasena);
 }
 
 /// Autenticación local para el prototipo. Las contraseñas se guardan con sal y
@@ -126,6 +133,8 @@ class AuthLocal implements RepositorioAuth {
       email: email.trim(),
       rol: rol,
       creadoEn: DateTime.now(),
+      consentimientoFecha: DateTime.now(),
+      consentimientoVersion: versionConsentimiento,
     );
     final sal = _nuevaSal();
     usuarios[clave] = {...nuevo.toJson(), 'sal': sal, 'hash': _hash(sal, contrasena)};
@@ -136,4 +145,48 @@ class AuthLocal implements RepositorioAuth {
 
   @override
   Future<void> cerrarSesion() => _prefs.remove(_claveSesion);
+
+  Map<String, dynamic> _datosSesion() {
+    final actual = _prefs.getString(_claveSesion);
+    final datos = actual == null ? null : _usuarios()[actual];
+    if (datos == null) throw const ErrorAuth('No hay una sesión activa');
+    return Map<String, dynamic>.from(datos as Map);
+  }
+
+  void _verificar(Map<String, dynamic> datos, String contrasena) {
+    if (_hash(datos['sal'] as String, contrasena) != datos['hash']) {
+      throw const ErrorAuth('La contraseña actual no es correcta');
+    }
+  }
+
+  @override
+  Future<Usuario> actualizarPerfil(Usuario usuario) async {
+    final usuarios = _usuarios();
+    final datos = usuarios[usuario.usuario];
+    if (datos == null) throw const ErrorAuth('La cuenta no existe');
+    final anteriores = Map<String, dynamic>.from(datos as Map);
+    usuarios[usuario.usuario] = {...usuario.toJson(), 'sal': anteriores['sal'], 'hash': anteriores['hash']};
+    await _guardarUsuarios(usuarios);
+    return usuario;
+  }
+
+  @override
+  Future<void> cambiarContrasena({required String actual, required String nueva}) async {
+    final datos = _datosSesion();
+    _verificar(datos, actual);
+    if (nueva.length < 6) throw const ErrorAuth('La nueva contraseña debe tener al menos 6 caracteres');
+    final sal = _nuevaSal();
+    final usuarios = _usuarios();
+    usuarios[datos['usuario'] as String] = {...datos, 'sal': sal, 'hash': _hash(sal, nueva)};
+    await _guardarUsuarios(usuarios);
+  }
+
+  @override
+  Future<void> eliminarCuenta(String contrasena) async {
+    final datos = _datosSesion();
+    _verificar(datos, contrasena);
+    final usuarios = _usuarios()..remove(datos['usuario']);
+    await _guardarUsuarios(usuarios);
+    await _prefs.remove(_claveSesion);
+  }
 }

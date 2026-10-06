@@ -10,7 +10,10 @@ import '../../core/utils/presentacion.dart';
 import '../../core/widgets/estadistica.dart';
 import '../../core/widgets/item_sesion.dart';
 import '../../core/widgets/tarjeta.dart';
+import '../../core/tema/tipografia.dart';
 import '../../estado/proveedores.dart';
+import '../../modelos/evaluacion.dart';
+import '../../modelos/logros.dart';
 import '../../modelos/resultado_analisis.dart';
 import '../../modelos/sesion.dart';
 import '../../rutas.dart';
@@ -35,6 +38,9 @@ class _ProgresoPantallaState extends ConsumerState<ProgresoPantalla> {
     final filtro = idsConSesiones.contains(_ejercicio) ? _ejercicio : null;
     final sesiones = filtro == null ? todas : todas.where((s) => s.ejercicio == filtro).toList();
     final resumen = Resumen.desde(sesiones);
+    final evaluaciones = ref.watch(evaluacionesProvider).value ?? const <EvaluacionFuncional>[];
+    final fechas = [...todas.map((s) => s.fecha), ...evaluaciones.map((e) => e.fecha)];
+    final conSensaciones = sesiones.where((s) => s.sensaciones != null).toList();
 
     return Scaffold(
       body: SafeArea(
@@ -44,7 +50,21 @@ class _ProgresoPantallaState extends ConsumerState<ProgresoPantalla> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(Medidas.margen, 16, Medidas.margen, 32),
             children: [
-              Text('Progreso', style: context.textos.headlineMedium),
+              Row(
+                children: [
+                  Expanded(child: Text('Progreso', style: context.textos.headlineMedium)),
+                  IconButton(
+                    tooltip: 'Logros',
+                    onPressed: () => context.push(Rutas.logros),
+                    icon: const Icon(Icons.emoji_events_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Compartir reporte',
+                    onPressed: () => context.push(Rutas.datos),
+                    icon: const Icon(Icons.ios_share_rounded),
+                  ),
+                ],
+              ),
               const SizedBox(height: 4),
               Text(
                 'Tu evolución y las correcciones más frecuentes.',
@@ -61,10 +81,7 @@ class _ProgresoPantallaState extends ConsumerState<ProgresoPantalla> {
                   icono: Icons.insights_rounded,
                   titulo: 'Sin datos todavía',
                   mensaje: 'Cuando completes tus primeras sesiones verás aquí tu evolución.',
-                  accion: FilledButton(
-                    onPressed: () => context.go(Rutas.ejercicios),
-                    child: const Text('Ver ejercicios'),
-                  ),
+                  accion: FilledButton(onPressed: () => context.go(Rutas.entrenar), child: const Text('Ir a entrenar')),
                 )
               else ...[
                 SizedBox(
@@ -141,6 +158,9 @@ class _ProgresoPantallaState extends ConsumerState<ProgresoPantalla> {
                   ],
                 ),
                 const SizedBox(height: 24),
+                const EncabezadoSeccion(titulo: 'Tus últimas 12 semanas'),
+                _CalendarioActividad(fechas: fechas),
+                const SizedBox(height: 24),
                 if (sesiones.length >= 2) ...[
                   const EncabezadoSeccion(titulo: 'Evolución del puntaje'),
                   Tarjeta(
@@ -149,8 +169,25 @@ class _ProgresoPantallaState extends ConsumerState<ProgresoPantalla> {
                   ),
                   const SizedBox(height: 24),
                 ],
+                if (conSensaciones.length >= 2) ...[
+                  const EncabezadoSeccion(titulo: 'Esfuerzo y dolor'),
+                  Tarjeta(
+                    padding: const EdgeInsets.fromLTRB(8, 18, 18, 8),
+                    child: _GraficoSensaciones(sesiones: conSensaciones),
+                  ),
+                  const SizedBox(height: 24),
+                ],
                 _CorreccionesFrecuentes(sesiones: sesiones),
-                const EncabezadoSeccion(titulo: 'Historial'),
+                if (evaluaciones.isNotEmpty) ...[
+                  EncabezadoSeccion(
+                    titulo: 'Evaluaciones',
+                    accion: 'Ver todas',
+                    onAccion: () => context.go(Rutas.entrenarEn('evaluaciones')),
+                  ),
+                  _ResumenEvaluaciones(evaluaciones: evaluaciones),
+                  const SizedBox(height: 24),
+                ],
+                EncabezadoSeccion(titulo: 'Historial', accion: 'Desliza para borrar', onAccion: null),
                 ..._historialAgrupado(context, sesiones),
               ],
             ],
@@ -158,6 +195,28 @@ class _ProgresoPantallaState extends ConsumerState<ProgresoPantalla> {
         ),
       ),
     );
+  }
+
+  /// Elimina la sesión con opción de deshacer (la grabación se borra al
+  /// cerrarse el aviso sin deshacer).
+  Future<void> _eliminar(Sesion s) async {
+    final notificador = ref.read(historialProvider.notifier);
+    final mensajero = ScaffoldMessenger.of(context);
+    await notificador.ocultar(s);
+    mensajero.clearSnackBars();
+    final razon = await mensajero
+        .showSnackBar(
+          SnackBar(
+            content: const Text('Sesión eliminada'),
+            action: SnackBarAction(label: 'Deshacer', onPressed: () {}),
+          ),
+        )
+        .closed;
+    if (razon == SnackBarClosedReason.action) {
+      await notificador.restaurar(s);
+    } else {
+      await notificador.borrarAdjuntos(s);
+    }
   }
 
   List<Widget> _historialAgrupado(BuildContext context, List<Sesion> sesiones) {
@@ -180,9 +239,23 @@ class _ProgresoPantallaState extends ConsumerState<ProgresoPantalla> {
       widgets.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: ItemSesion(
-            sesion: s,
-            onTap: () => context.push(Rutas.sesion(s.id), extra: s),
+          child: Dismissible(
+            key: ValueKey('sesion-${s.id}'),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 20),
+              decoration: BoxDecoration(
+                color: context.paleta.peligroSuave,
+                borderRadius: BorderRadius.circular(Medidas.radioL),
+              ),
+              child: Icon(Icons.delete_outline_rounded, color: context.paleta.peligro),
+            ),
+            onDismissed: (_) => _eliminar(s),
+            child: ItemSesion(
+              sesion: s,
+              onTap: () => context.push(Rutas.sesion(s.id), extra: s),
+            ),
           ),
         ),
       );
@@ -328,6 +401,324 @@ class _CorreccionesFrecuentes extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Calendario tipo mapa de calor: una columna por semana (lunes arriba).
+class _CalendarioActividad extends StatelessWidget {
+  final List<DateTime> fechas;
+  const _CalendarioActividad({required this.fechas});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.paleta;
+    const semanas = 12;
+    final mapa = mapaActividad(fechas, semanas: semanas);
+    final dias = mapa.keys.toList()..sort();
+    final hoy = soloDia(DateTime.now());
+    final activos = mapa.values.where((v) => v > 0).length;
+    Color color(int n) => switch (n) {
+      0 => p.superficieAlta,
+      1 => p.primario.withValues(alpha: 0.35),
+      2 => p.primario.withValues(alpha: 0.65),
+      _ => p.primario,
+    };
+    return Tarjeta(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, c) {
+              const etiqueta = 18.0;
+              const sep = 4.0;
+              final celda = ((c.maxWidth - etiqueta - sep * (semanas - 1)) / semanas).clamp(8.0, 26.0);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const SizedBox(width: etiqueta),
+                      for (var w = 0; w < semanas; w++) ...[
+                        if (w > 0) const SizedBox(width: sep),
+                        SizedBox(
+                          width: celda,
+                          child: Builder(
+                            builder: (context) {
+                              final lunes = dias[w * 7];
+                              final nuevoMes = w == 0 || dias[(w - 1) * 7].month != lunes.month;
+                              return Text(
+                                nuevoMes ? Formato.mesCorto(lunes.month) : '',
+                                maxLines: 1,
+                                overflow: TextOverflow.visible,
+                                softWrap: false,
+                                style: context.textos.labelSmall?.copyWith(color: p.textoTerciario, fontSize: 10),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  for (var d = 0; d < 7; d++) ...[
+                    if (d > 0) const SizedBox(height: sep),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: etiqueta,
+                          child: Text(
+                            d.isEven ? Formato.inicialDia(dias[d]) : '',
+                            style: context.textos.labelSmall?.copyWith(color: p.textoTerciario, fontSize: 10),
+                          ),
+                        ),
+                        for (var w = 0; w < semanas; w++) ...[
+                          if (w > 0) const SizedBox(width: sep),
+                          Builder(
+                            builder: (context) {
+                              final dia = dias[w * 7 + d];
+                              final n = mapa[dia] ?? 0;
+                              final futuro = dia.isAfter(hoy);
+                              return Tooltip(
+                                message:
+                                    '${dia.day} ${Formato.mesCorto(dia.month)}: '
+                                    '${Formato.plural(n, 'actividad', 'actividades')}',
+                                child: Container(
+                                  width: celda,
+                                  height: celda,
+                                  decoration: BoxDecoration(
+                                    color: futuro ? Colors.transparent : color(n),
+                                    borderRadius: BorderRadius.circular(celda * 0.28),
+                                    border: dia == hoy ? Border.all(color: p.primario, width: 1.5) : null,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${Formato.plural(activos, 'día activo', 'días activos')} · mejor racha ${mejorRacha(fechas)}',
+                  style: context.textos.bodySmall,
+                ),
+              ),
+              Text('Menos', style: context.textos.labelSmall?.copyWith(color: p.textoTerciario)),
+              for (final n in const [0, 1, 2, 3])
+                Container(
+                  width: 11,
+                  height: 11,
+                  margin: const EdgeInsets.only(left: 3),
+                  decoration: BoxDecoration(color: color(n), borderRadius: BorderRadius.circular(3)),
+                ),
+              const SizedBox(width: 3),
+              Text('Más', style: context.textos.labelSmall?.copyWith(color: p.textoTerciario)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GraficoSensaciones extends StatelessWidget {
+  final List<Sesion> sesiones;
+  const _GraficoSensaciones({required this.sesiones});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.paleta;
+    final orden = sesiones.take(20).toList().reversed.toList();
+    LineChartBarData serie(Color color, int Function(Sensaciones s) valor) => LineChartBarData(
+      spots: [for (var i = 0; i < orden.length; i++) FlSpot(i.toDouble(), valor(orden[i].sensaciones!).toDouble())],
+      isCurved: true,
+      preventCurveOverShooting: true,
+      color: color,
+      barWidth: 3,
+      dotData: const FlDotData(show: false),
+    );
+    return Column(
+      children: [
+        SizedBox(
+          height: 160,
+          child: LineChart(
+            LineChartData(
+              minY: 0,
+              maxY: 10,
+              minX: 0,
+              maxX: (orden.length - 1).toDouble(),
+              gridData: FlGridData(
+                drawVerticalLine: false,
+                horizontalInterval: 5,
+                getDrawingHorizontalLine: (_) => FlLine(color: p.borde, strokeWidth: 1, dashArray: const [4, 4]),
+              ),
+              borderData: FlBorderData(show: false),
+              titlesData: FlTitlesData(
+                topTitles: const AxisTitles(),
+                rightTitles: const AxisTitles(),
+                bottomTitles: const AxisTitles(),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 28,
+                    interval: 5,
+                    getTitlesWidget: (v, meta) => SideTitleWidget(
+                      meta: meta,
+                      child: Text('${v.round()}', style: context.textos.labelSmall?.copyWith(color: p.textoTerciario)),
+                    ),
+                  ),
+                ),
+              ),
+              lineTouchData: const LineTouchData(enabled: false),
+              lineBarsData: [serie(p.primario, (s) => s.esfuerzo), serie(p.peligro, (s) => s.dolor)],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _Leyenda(color: p.primario, texto: 'Esfuerzo'),
+            const SizedBox(width: 18),
+            _Leyenda(color: p.peligro, texto: 'Dolor'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _Leyenda extends StatelessWidget {
+  final Color color;
+  final String texto;
+  const _Leyenda({required this.color, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 4,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 6),
+        Text(texto, style: context.textos.labelMedium),
+      ],
+    );
+  }
+}
+
+class _ResumenEvaluaciones extends StatelessWidget {
+  final List<EvaluacionFuncional> evaluaciones;
+  const _ResumenEvaluaciones({required this.evaluaciones});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.paleta;
+    final sts = [
+      for (final e in evaluaciones)
+        if (e.tipo == TipoEvaluacion.sentarsePararse30s) e,
+    ]..sort((a, b) => a.fecha.compareTo(b.fecha));
+    final rom = <String, EvaluacionFuncional>{};
+    for (final e in [...evaluaciones]..sort((a, b) => b.fecha.compareTo(a.fecha))) {
+      if (e.tipo == TipoEvaluacion.rangoArticular && e.articulacion != null) {
+        rom.putIfAbsent('${e.articulacion!.name}-${e.lado?.name}', () => e);
+      }
+    }
+    final maximo = sts.fold<int>(1, (m, e) => (e.repeticiones ?? 0) > m ? e.repeticiones! : m);
+    return Tarjeta(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (sts.isNotEmpty) ...[
+            Text('Sentarse y pararse 30 s', style: context.textos.titleSmall),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 92,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (final e in sts.length > 8 ? sts.sublist(sts.length - 8) : sts)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text('${e.repeticiones ?? 0}', style: AppTipo.numero(13, p.texto)),
+                            const SizedBox(height: 4),
+                            Container(
+                              height: 8 + 44 * ((e.repeticiones ?? 0) / maximo),
+                              decoration: BoxDecoration(
+                                color: e.clasificacion == ClasificacionSts30.bajoPromedio ? p.advertencia : p.acento,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${e.fecha.day}/${e.fecha.month}',
+                              style: context.textos.labelSmall?.copyWith(color: p.textoTerciario, fontSize: 10),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          if (sts.isNotEmpty && rom.isNotEmpty) const Divider(height: 28),
+          if (rom.isNotEmpty) ...[
+            Text('Rango de movimiento', style: context.textos.titleSmall),
+            const SizedBox(height: 8),
+            for (final e in rom.values)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        '${e.articulacion!.etiqueta} ${e.lado?.etiqueta.toLowerCase() ?? ''}',
+                        style: context.textos.bodyMedium,
+                      ),
+                    ),
+                    Expanded(
+                      flex: 4,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: LinearProgressIndicator(
+                          value: (e.fraccionReferencia ?? 0).clamp(0.0, 1.0),
+                          minHeight: 8,
+                          backgroundColor: p.superficieAlta,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 52,
+                      child: Text(
+                        '${(e.maximo ?? 0).round()}°',
+                        textAlign: TextAlign.end,
+                        style: AppTipo.numero(15, p.texto),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );

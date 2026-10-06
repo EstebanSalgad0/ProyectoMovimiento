@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -64,10 +65,13 @@ class ServicioIA {
     required String ejercicio,
     CancelToken? cancelar,
     void Function(double progreso)? onProgreso,
+    Map<String, dynamic>? ajustes,
   }) async {
     Future<Response<dynamic>> enviar(String ruta) async {
       final formulario = FormData.fromMap({
         'ejercicio': ejercicio,
+        'esqueleto': 'true',
+        if (ajustes != null && ajustes.isNotEmpty) 'ajustes': jsonEncode(ajustes),
         'video': await MultipartFile.fromFile(video.path, filename: video.uri.pathSegments.last),
       });
       return _dio.post<dynamic>(

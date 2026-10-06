@@ -272,4 +272,14 @@ class ResultadoAnalisis {
   }
 
   Map<String, dynamic> toJson() => crudo;
+
+  /// Esqueleto muestreado que envía el servidor (se guarda aparte).
+  Map<String, dynamic>? get esqueletoCrudo =>
+      crudo['esqueleto'] is Map ? Map<String, dynamic>.from(crudo['esqueleto'] as Map) : null;
+
+  /// Copia sin el esqueleto, para que el historial siga siendo liviano.
+  ResultadoAnalisis sinEsqueleto() {
+    if (!crudo.containsKey('esqueleto')) return this;
+    return ResultadoAnalisis.fromJson(Map<String, dynamic>.from(crudo)..remove('esqueleto'));
+  }
 }

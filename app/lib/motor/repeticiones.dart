@@ -62,6 +62,11 @@ class DetectorRepeticiones {
     return _dPico - d > histeresisFase ? Fase.vuelta : Fase.ida;
   }
 
+  bool get enMovimiento => _enMovimiento;
+
+  /// En el movimiento actual ya se alcanzó el rango mínimo de una repetición válida.
+  bool get picoValido => _enMovimiento && _dPico >= minimo;
+
   /// Avance del movimiento entre el umbral de inicio (0) y el mínimo válido (1).
   double progreso(double? valor) {
     if (valor == null) return 0;

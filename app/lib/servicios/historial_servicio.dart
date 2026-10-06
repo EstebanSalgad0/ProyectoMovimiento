@@ -9,7 +9,10 @@ import '../modelos/sesion.dart';
 /// de backend se agrega sincronización con el servidor (ver plan).
 abstract class HistorialServicio {
   Future<List<Sesion>> obtener(String usuario);
+
+  /// Crea o reemplaza (por id) una sesión.
   Future<void> guardar(Sesion sesion);
+  Future<void> eliminar(String usuario, String id);
   Future<void> borrarTodo(String usuario);
 }
 
@@ -50,15 +53,24 @@ class HistorialArchivo implements HistorialServicio {
     }
   }
 
-  @override
-  Future<void> guardar(Sesion sesion) async {
-    final archivo = await _archivo(sesion.usuario);
-    final actuales = await obtener(sesion.usuario);
-    final todas = [sesion, ...actuales.where((s) => s.id != sesion.id)];
+  Future<void> _escribir(String usuario, List<Sesion> sesiones) async {
+    final archivo = await _archivo(usuario);
     // Escritura atómica: primero a un temporal y luego se reemplaza.
     final temporal = File('${archivo.path}.tmp');
-    await temporal.writeAsString(jsonEncode([for (final s in todas) s.toJson()]), flush: true);
+    await temporal.writeAsString(jsonEncode([for (final s in sesiones) s.toJson()]), flush: true);
     await temporal.rename(archivo.path);
+  }
+
+  @override
+  Future<void> guardar(Sesion sesion) async {
+    final actuales = await obtener(sesion.usuario);
+    await _escribir(sesion.usuario, [sesion, ...actuales.where((s) => s.id != sesion.id)]);
+  }
+
+  @override
+  Future<void> eliminar(String usuario, String id) async {
+    final actuales = await obtener(usuario);
+    await _escribir(usuario, actuales.where((s) => s.id != id).toList());
   }
 
   @override
@@ -88,6 +100,9 @@ class HistorialMemoria implements HistorialServicio {
     lista.removeWhere((s) => s.id == sesion.id);
     lista.add(sesion);
   }
+
+  @override
+  Future<void> eliminar(String usuario, String id) async => _datos[usuario]?.removeWhere((s) => s.id == id);
 
   @override
   Future<void> borrarTodo(String usuario) async => _datos.remove(usuario);

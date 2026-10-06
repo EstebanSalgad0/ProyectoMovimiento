@@ -29,7 +29,7 @@ class ShellPantalla extends StatelessWidget {
             NavigationDestination(
               icon: Icon(Icons.fitness_center_outlined),
               selectedIcon: Icon(Icons.fitness_center_rounded),
-              label: 'Ejercicios',
+              label: 'Entrenar',
             ),
             NavigationDestination(
               icon: Icon(Icons.insights_outlined),

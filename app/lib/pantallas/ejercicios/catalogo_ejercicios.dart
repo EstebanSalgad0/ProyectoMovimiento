@@ -12,14 +12,18 @@ import '../../estado/proveedores.dart';
 import '../../motor/especificacion.dart';
 import '../../rutas.dart';
 
-class CatalogoPantalla extends ConsumerStatefulWidget {
-  const CatalogoPantalla({super.key});
+/// Catálogo de ejercicios con búsqueda y filtros (sección de Entrenar).
+class CatalogoEjercicios extends ConsumerStatefulWidget {
+  const CatalogoEjercicios({super.key});
 
   @override
-  ConsumerState<CatalogoPantalla> createState() => _CatalogoPantallaState();
+  ConsumerState<CatalogoEjercicios> createState() => _CatalogoEjerciciosState();
 }
 
-class _CatalogoPantallaState extends ConsumerState<CatalogoPantalla> {
+class _CatalogoEjerciciosState extends ConsumerState<CatalogoEjercicios> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   String _filtro = 'todos';
   String _busqueda = '';
 
@@ -40,6 +44,7 @@ class _CatalogoPantallaState extends ConsumerState<CatalogoPantalla> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final p = context.paleta;
     final todos = ref.watch(especificacionProvider).ejercicios;
     final q = _normalizar(_busqueda.trim());
@@ -50,86 +55,79 @@ class _CatalogoPantallaState extends ConsumerState<CatalogoPantalla> {
       return pasaFiltro && pasaBusqueda;
     }).toList();
 
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(Medidas.margen, 16, Medidas.margen, 0),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Ejercicios', style: context.textos.headlineMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${todos.length} movimientos con análisis de técnica',
-                      style: context.textos.bodyMedium?.copyWith(color: p.textoSecundario),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      onChanged: (v) => setState(() => _busqueda = v),
-                      textInputAction: TextInputAction.search,
-                      decoration: const InputDecoration(
-                        hintText: 'Buscar por nombre o músculo',
-                        prefixIcon: Icon(Icons.search_rounded),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 44,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: Medidas.margen),
-                  children: [
-                    for (final f in _filtros.entries)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(f.value),
-                          selected: _filtro == f.key,
-                          showCheckmark: false,
-                          onSelected: (_) => setState(() => _filtro = f.key),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            if (visibles.isEmpty)
-              const SliverPadding(
-                padding: EdgeInsets.all(Medidas.margen),
-                sliver: SliverToBoxAdapter(
-                  child: EstadoVacio(
-                    icono: Icons.search_off_rounded,
-                    titulo: 'Sin resultados',
-                    mensaje: 'Prueba con otro nombre o cambia el filtro.',
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(Medidas.margen, 16, Medidas.margen, 0),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  onChanged: (v) => setState(() => _busqueda = v),
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(
+                    hintText: 'Buscar por nombre o músculo',
+                    prefixIcon: Icon(Icons.search_rounded),
                   ),
                 ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(Medidas.margen, 12, Medidas.margen, 32),
-                sliver: SliverGrid.builder(
-                  itemCount: visibles.length,
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 240,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.74,
-                  ),
-                  itemBuilder: (context, i) => _TarjetaEjercicio(ejercicio: visibles[i]),
+                const SizedBox(height: 8),
+                Text(
+                  '${todos.length} movimientos con análisis de técnica',
+                  style: context.textos.bodySmall?.copyWith(color: p.textoSecundario),
                 ),
-              ),
-          ],
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
         ),
-      ),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: Medidas.margen),
+              children: [
+                for (final f in _filtros.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(f.value),
+                      selected: _filtro == f.key,
+                      showCheckmark: false,
+                      onSelected: (_) => setState(() => _filtro = f.key),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (visibles.isEmpty)
+          const SliverPadding(
+            padding: EdgeInsets.all(Medidas.margen),
+            sliver: SliverToBoxAdapter(
+              child: EstadoVacio(
+                icono: Icons.search_off_rounded,
+                titulo: 'Sin resultados',
+                mensaje: 'Prueba con otro nombre o cambia el filtro.',
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(Medidas.margen, 12, Medidas.margen, 32),
+            sliver: SliverGrid.builder(
+              itemCount: visibles.length,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 240,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.74,
+              ),
+              itemBuilder: (context, i) => _TarjetaEjercicio(ejercicio: visibles[i]),
+            ),
+          ),
+      ],
     );
   }
 }

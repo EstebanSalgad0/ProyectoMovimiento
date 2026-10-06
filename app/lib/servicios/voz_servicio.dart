@@ -5,13 +5,23 @@ import 'package:flutter_tts/flutter_tts.dart';
 class VozServicio {
   final FlutterTts _tts = FlutterTts();
   bool _listo = false;
+  double _velocidad = 0.5;
   DateTime _ultima = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Velocidad de habla (0,35 lenta · 0,5 normal · 0,6 rápida).
+  Future<void> cambiarVelocidad(double velocidad) async {
+    _velocidad = velocidad;
+    if (!_listo) return;
+    try {
+      await _tts.setSpeechRate(velocidad);
+    } catch (_) {}
+  }
 
   Future<void> _preparar() async {
     if (_listo) return;
     try {
       await _tts.setLanguage('es-ES');
-      await _tts.setSpeechRate(0.5);
+      await _tts.setSpeechRate(_velocidad);
       await _tts.awaitSpeakCompletion(false);
       _listo = true;
     } catch (e) {

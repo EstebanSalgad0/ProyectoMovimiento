@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 
 import '../../motor/puntos.dart';
+import 'camara_pose.dart';
 
 /// Segmentos del esqueleto asociados a cada zona del cuerpo.
 const _segmentosPorZona = <String, List<List<int>>>{
@@ -65,36 +64,9 @@ class PintorEsqueleto extends CustomPainter {
     this.visibilidadMinima = 0.5,
   });
 
-  // Conversión de coordenadas de imagen a lienzo (según el ejemplo oficial de
-  // google_mlkit: compensa rotación del sensor y espejo de la cámara frontal).
-  double _x(double x, Size lienzo) {
-    switch (rotacion) {
-      case InputImageRotation.rotation90deg:
-        return x * lienzo.width / (Platform.isIOS ? tamanoImagen.width : tamanoImagen.height);
-      case InputImageRotation.rotation270deg:
-        return lienzo.width - x * lienzo.width / (Platform.isIOS ? tamanoImagen.width : tamanoImagen.height);
-      case InputImageRotation.rotation0deg:
-      case InputImageRotation.rotation180deg:
-        return lente == CameraLensDirection.back
-            ? x * lienzo.width / tamanoImagen.width
-            : lienzo.width - x * lienzo.width / tamanoImagen.width;
-    }
-  }
-
-  double _y(double y, Size lienzo) {
-    switch (rotacion) {
-      case InputImageRotation.rotation90deg:
-      case InputImageRotation.rotation270deg:
-        return y * lienzo.height / (Platform.isIOS ? tamanoImagen.height : tamanoImagen.width);
-      case InputImageRotation.rotation0deg:
-      case InputImageRotation.rotation180deg:
-        return y * lienzo.height / tamanoImagen.height;
-    }
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
-    Offset pos(int i) => Offset(_x(puntos[i].x, size), _y(puntos[i].y, size));
+    Offset pos(int i) => aLienzo(puntos[i].x, puntos[i].y, size, tamanoImagen, rotacion, lente);
     bool visible(int i) => puntos[i].v >= visibilidadMinima;
 
     final enAlerta = <String>{};

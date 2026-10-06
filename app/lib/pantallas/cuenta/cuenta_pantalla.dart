@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/tema/colores.dart';
 import '../../core/tema/tema.dart';
+import '../../core/tema/tipografia.dart';
 import '../../core/utils/formato.dart';
+import '../../core/widgets/avatar.dart';
 import '../../core/widgets/boton_principal.dart';
 import '../../core/widgets/tarjeta.dart';
 import '../../estado/proveedores.dart';
+import '../../rutas.dart';
+import '../../servicios/auth_servicio.dart';
 import '../../servicios/servicio_ia.dart';
 
-/// Perfil y ajustes: tema, voz, cámara, servidor de análisis y datos.
+/// Perfil, logros, ajustes de entrenamiento, apariencia, servidor y datos.
 class CuentaPantalla extends ConsumerWidget {
   const CuentaPantalla({super.key});
 
@@ -29,26 +34,64 @@ class CuentaPantalla extends ConsumerWidget {
     if (ok == true) await ref.read(authProvider.notifier).cerrarSesion();
   }
 
-  Future<void> _confirmarBorrado(BuildContext context, WidgetRef ref) async {
+  Future<void> _cambiarContrasena(BuildContext context, WidgetRef ref) async {
+    final actual = TextEditingController();
+    final nueva = TextEditingController();
+    final repetida = TextEditingController();
+    String? error;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('¿Borrar historial?'),
-        content: const Text('Se eliminarán todas tus sesiones de este teléfono. Esta acción no se puede deshacer.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: context.paleta.peligro),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Borrar'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const Text('Cambiar contraseña'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: actual,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Contraseña actual'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: nueva,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Nueva contraseña', helperText: 'Mínimo 6 caracteres'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: repetida,
+                obscureText: true,
+                decoration: InputDecoration(labelText: 'Repite la nueva contraseña', errorText: error),
+              ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () async {
+                if (nueva.text != repetida.text) {
+                  setDialog(() => error = 'Las contraseñas no coinciden');
+                  return;
+                }
+                try {
+                  await ref.read(authProvider.notifier).cambiarContrasena(actual: actual.text, nueva: nueva.text);
+                  if (context.mounted) Navigator.pop(context, true);
+                } on ErrorAuth catch (e) {
+                  setDialog(() => error = e.mensaje);
+                }
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
       ),
     );
-    if (ok != true) return;
-    await ref.read(historialProvider.notifier).borrarTodo();
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Historial eliminado')));
+    for (final c in [actual, nueva, repetida]) {
+      c.dispose();
+    }
+    if (ok == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contraseña actualizada')));
     }
   }
 
@@ -59,6 +102,8 @@ class CuentaPantalla extends ConsumerWidget {
     final ajustes = ref.watch(ajustesProvider);
     final notificador = ref.read(ajustesProvider.notifier);
     final sesiones = ref.watch(historialProvider).value?.length ?? 0;
+    final logros = ref.watch(logrosProvider);
+    final desbloqueados = logros.where((l) => l.desbloqueado).toList();
 
     return Scaffold(
       body: SafeArea(
@@ -71,86 +116,143 @@ class CuentaPantalla extends ConsumerWidget {
             if (usuario != null)
               Tarjeta(
                 padding: const EdgeInsets.all(18),
-                child: Row(
+                onTap: () => context.push(Rutas.perfil),
+                child: Column(
                   children: [
-                    Container(
-                      width: 62,
-                      height: 62,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(gradient: p.gradiente, shape: BoxShape.circle),
-                      child: Text(
-                        usuario.iniciales,
-                        style: context.textos.titleLarge?.copyWith(color: AppColores.blanco),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(usuario.nombre, style: context.textos.titleMedium),
-                          const SizedBox(height: 2),
-                          Text(
-                            usuario.email.isEmpty ? '@${usuario.usuario}' : usuario.email,
-                            style: context.textos.bodySmall,
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
+                    Row(
+                      children: [
+                        AvatarUsuario(usuario: usuario),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              ChipDato(texto: usuario.rol.etiqueta, color: p.primario, fondo: p.primarioSuave),
-                              ChipDato(texto: Formato.plural(sesiones, 'sesión', 'sesiones')),
+                              Text(usuario.nombre, style: context.textos.titleMedium),
+                              const SizedBox(height: 2),
+                              Text(
+                                usuario.email.isEmpty ? '@${usuario.usuario}' : usuario.email,
+                                style: context.textos.bodySmall,
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  ChipDato(texto: usuario.rol.etiqueta, color: p.primario, fondo: p.primarioSuave),
+                                  ChipDato(texto: Formato.plural(sesiones, 'sesión', 'sesiones')),
+                                ],
+                              ),
                             ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded, color: p.textoTerciario),
+                      ],
+                    ),
+                    if (usuario.avancePerfil < 1) ...[
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: usuario.avancePerfil,
+                                minHeight: 7,
+                                backgroundColor: p.superficieAlta,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Perfil ${(usuario.avancePerfil * 100).round()} %',
+                            style: context.textos.labelMedium?.copyWith(color: p.primario),
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
-            const SizedBox(height: 24),
-
-            const EncabezadoSeccion(titulo: 'Preferencias'),
+            const SizedBox(height: 12),
             Tarjeta(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
+              onTap: () => context.push(Rutas.logros),
+              child: Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  IconoCaja(icono: Icons.emoji_events_rounded, color: p.advertencia, fondo: p.advertenciaSuave),
+                  const SizedBox(width: 14),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Apariencia', style: context.textos.titleSmall),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: SegmentedButton<ThemeMode>(
-                            segments: const [
-                              ButtonSegment(
-                                value: ThemeMode.system,
-                                label: Text('Sistema'),
-                                icon: Icon(Icons.brightness_auto_rounded),
-                              ),
-                              ButtonSegment(
-                                value: ThemeMode.light,
-                                label: Text('Claro'),
-                                icon: Icon(Icons.light_mode_rounded),
-                              ),
-                              ButtonSegment(
-                                value: ThemeMode.dark,
-                                label: Text('Oscuro'),
-                                icon: Icon(Icons.dark_mode_rounded),
-                              ),
-                            ],
-                            selected: {ajustes.tema},
-                            showSelectedIcon: false,
-                            onSelectionChanged: (s) => notificador.cambiarTema(s.first),
-                          ),
+                        Text('Logros', style: context.textos.titleSmall),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${desbloqueados.length} de ${logros.length} desbloqueados',
+                          style: context.textos.bodySmall,
                         ),
                       ],
                     ),
                   ),
+                  for (final l in desbloqueados.take(3))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(gradient: p.gradiente, shape: BoxShape.circle),
+                        child: Icon(l.icono, size: 16, color: AppColores.blanco),
+                      ),
+                    ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, color: p.textoTerciario),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            const EncabezadoSeccion(titulo: 'Entrenamiento'),
+            Tarjeta(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                children: [
+                  if (usuario != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.flag_outlined),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Meta semanal', style: context.textos.bodyLarge),
+                                Text('Días de entrenamiento', style: context.textos.bodySmall),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Menos días',
+                            onPressed: usuario.metaSemanal > 1
+                                ? () => ref
+                                      .read(authProvider.notifier)
+                                      .actualizarPerfil(usuario.copyWith(metaSemanal: usuario.metaSemanal - 1))
+                                : null,
+                            icon: const Icon(Icons.remove_circle_outline_rounded),
+                          ),
+                          Text('${usuario.metaSemanal}', style: AppTipo.numero(20, p.texto)),
+                          IconButton(
+                            tooltip: 'Más días',
+                            onPressed: usuario.metaSemanal < 7
+                                ? () => ref
+                                      .read(authProvider.notifier)
+                                      .actualizarPerfil(usuario.copyWith(metaSemanal: usuario.metaSemanal + 1))
+                                : null,
+                            icon: const Icon(Icons.add_circle_outline_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
                   const Divider(indent: 16, endIndent: 16),
                   SwitchListTile(
                     secondary: const Icon(Icons.record_voice_over_outlined),
@@ -159,6 +261,36 @@ class CuentaPantalla extends ConsumerWidget {
                     value: ajustes.voz,
                     onChanged: notificador.cambiarVoz,
                   ),
+                  if (ajustes.voz)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<double>(
+                          segments: const [
+                            ButtonSegment(value: 0.4, label: Text('Lenta')),
+                            ButtonSegment(value: 0.5, label: Text('Normal')),
+                            ButtonSegment(value: 0.6, label: Text('Rápida')),
+                          ],
+                          selected: {ajustes.velocidadVoz},
+                          showSelectedIcon: false,
+                          onSelectionChanged: (s) => notificador.cambiarVelocidadVoz(s.first),
+                        ),
+                      ),
+                    ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.vibration_rounded),
+                    title: const Text('Vibrar en cada repetición'),
+                    value: ajustes.vibracion,
+                    onChanged: notificador.cambiarVibracion,
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.accessibility_new_rounded),
+                    title: const Text('Mostrar esqueleto'),
+                    subtitle: const Text('Dibuja los puntos del cuerpo sobre la cámara'),
+                    value: ajustes.mostrarEsqueleto,
+                    onChanged: notificador.cambiarMostrarEsqueleto,
+                  ),
                   SwitchListTile(
                     secondary: const Icon(Icons.camera_front_outlined),
                     title: const Text('Usar cámara frontal'),
@@ -166,7 +298,52 @@ class CuentaPantalla extends ConsumerWidget {
                     value: ajustes.camaraFrontal,
                     onChanged: notificador.cambiarCamaraFrontal,
                   ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Cuenta regresiva antes de empezar', style: context.textos.bodyLarge),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: SegmentedButton<int>(
+                            segments: const [
+                              ButtonSegment(value: 3, label: Text('3 s')),
+                              ButtonSegment(value: 5, label: Text('5 s')),
+                              ButtonSegment(value: 10, label: Text('10 s')),
+                            ],
+                            selected: {ajustes.cuentaRegresiva},
+                            showSelectedIcon: false,
+                            onSelectionChanged: (s) => notificador.cambiarCuentaRegresiva(s.first),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            const EncabezadoSeccion(titulo: 'Apariencia'),
+            Tarjeta(
+              child: SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<ThemeMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ThemeMode.system,
+                      label: Text('Sistema'),
+                      icon: Icon(Icons.brightness_auto_rounded),
+                    ),
+                    ButtonSegment(value: ThemeMode.light, label: Text('Claro'), icon: Icon(Icons.light_mode_rounded)),
+                    ButtonSegment(value: ThemeMode.dark, label: Text('Oscuro'), icon: Icon(Icons.dark_mode_rounded)),
+                  ],
+                  selected: {ajustes.tema},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (s) => notificador.cambiarTema(s.first),
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -175,21 +352,30 @@ class CuentaPantalla extends ConsumerWidget {
             const _TarjetaServidor(),
             const SizedBox(height: 24),
 
-            const EncabezadoSeccion(titulo: 'Datos y privacidad'),
+            const EncabezadoSeccion(titulo: 'Cuenta y datos'),
             Tarjeta(
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Column(
                 children: [
-                  const ListTile(
-                    leading: Icon(Icons.shield_outlined),
-                    title: Text('Procesamiento en el teléfono'),
-                    subtitle: Text('En tiempo real, las imágenes no salen de tu dispositivo.'),
+                  ListTile(
+                    leading: const Icon(Icons.person_outline_rounded),
+                    title: const Text('Mi perfil'),
+                    subtitle: const Text('Datos personales, objetivo y salud'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => context.push(Rutas.perfil),
                   ),
                   ListTile(
-                    leading: Icon(Icons.delete_outline_rounded, color: p.peligro),
-                    title: Text('Borrar historial', style: TextStyle(color: p.peligro)),
-                    subtitle: const Text('Elimina las sesiones guardadas en este teléfono'),
-                    onTap: () => _confirmarBorrado(context, ref),
+                    leading: const Icon(Icons.lock_outline_rounded),
+                    title: const Text('Cambiar contraseña'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => _cambiarContrasena(context, ref),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.privacy_tip_outlined),
+                    title: const Text('Datos y privacidad'),
+                    subtitle: const Text('Reporte PDF, exportar, borrar datos'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => context.push(Rutas.datos),
                   ),
                 ],
               ),

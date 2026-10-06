@@ -9,6 +9,8 @@ import 'package:medicina_app/estado/proveedores.dart';
 import 'package:medicina_app/modelos/resultado_analisis.dart';
 import 'package:medicina_app/pantallas/analizando/analizando_pantalla.dart';
 import 'package:medicina_app/rutas.dart';
+import 'package:medicina_app/servicios/adjuntos_servicio.dart';
+import 'package:medicina_app/servicios/evaluaciones_servicio.dart';
 import 'package:medicina_app/servicios/historial_servicio.dart';
 import 'package:medicina_app/servicios/servicio_ia.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,6 +31,7 @@ class _ServidorFalso extends ServicioIA {
     required String ejercicio,
     CancelToken? cancelar,
     void Function(double progreso)? onProgreso,
+    Map<String, dynamic>? ajustes,
   }) async {
     onProgreso?.call(0.5);
     await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -48,6 +51,8 @@ Future<ProviderContainer> _montarConServidor(WidgetTester tester, ServicioIA ser
       preferenciasProvider.overrideWithValue(prefs),
       especificacionProvider.overrideWithValue(cargarEspecificacion()),
       historialServicioProvider.overrideWithValue(HistorialMemoria()),
+      evaluacionesServicioProvider.overrideWithValue(EvaluacionesMemoria()),
+      adjuntosServicioProvider.overrideWithValue(AdjuntosMemoria()),
       servicioIAProvider.overrideWithValue(servidor),
     ],
   );

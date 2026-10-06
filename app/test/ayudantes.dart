@@ -6,11 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:medicina_app/app.dart';
 import 'package:medicina_app/estado/proveedores.dart';
+import 'package:medicina_app/modelos/evaluacion.dart';
 import 'package:medicina_app/modelos/resultado_analisis.dart';
 import 'package:medicina_app/modelos/sesion.dart';
 import 'package:medicina_app/motor/analizador.dart';
 import 'package:medicina_app/motor/especificacion.dart';
 import 'package:medicina_app/motor/puntos.dart';
+import 'package:medicina_app/servicios/adjuntos_servicio.dart';
+import 'package:medicina_app/servicios/evaluaciones_servicio.dart';
 import 'package:medicina_app/servicios/historial_servicio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -37,6 +40,7 @@ Future<ProviderContainer> montarApp(
   WidgetTester tester, {
   Map<String, Object> preferencias = const {},
   List<Sesion> sesiones = const [],
+  List<EvaluacionFuncional> evaluaciones = const [],
 }) async {
   SharedPreferences.setMockInitialValues(preferencias);
   final prefs = await SharedPreferences.getInstance();
@@ -46,6 +50,8 @@ Future<ProviderContainer> montarApp(
       preferenciasProvider.overrideWithValue(prefs),
       especificacionProvider.overrideWithValue(spec),
       historialServicioProvider.overrideWithValue(HistorialMemoria(sesiones)),
+      evaluacionesServicioProvider.overrideWithValue(EvaluacionesMemoria(evaluaciones)),
+      adjuntosServicioProvider.overrideWithValue(AdjuntosMemoria()),
     ],
   );
   addTearDown(contenedor.dispose);

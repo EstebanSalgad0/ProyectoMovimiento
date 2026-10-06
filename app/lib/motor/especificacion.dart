@@ -89,6 +89,32 @@ class Verificacion {
 
   bool get fallaPorMenor => _tiposQueFallanPorMenor.contains(tipo);
 
+  Verificacion conUmbral(double nuevo) => Verificacion(
+    codigo: codigo,
+    tipo: tipo,
+    umbral: nuevo,
+    severidad: severidad,
+    zona: zona,
+    titulo: titulo,
+    mensaje: mensaje,
+    metrica: metrica,
+    metricas: metricas,
+    fase: fase,
+    vistas: vistas,
+    mensajeOk: mensajeOk,
+  );
+
+  /// Rango razonable para ajustar el umbral desde la app.
+  RangoAjuste get rangoAjuste {
+    final m = metrica ?? '';
+    if (tipo == 'duracion_min') return const RangoAjuste(0.2, 4, 0.1, 's');
+    if (m.startsWith('valgo')) return const RangoAjuste(0.05, 0.5, 0.01, '');
+    if (m.startsWith('munecas')) return const RangoAjuste(-0.2, 1, 0.05, '');
+    final min = (umbral - 40).clamp(0, 180).toDouble();
+    final max = (umbral + 40).clamp(0, 180).toDouble();
+    return RangoAjuste(min, max, 1, '°');
+  }
+
   factory Verificacion.fromJson(String ejercicioId, Map<String, dynamic> j) {
     final tipo = j['tipo'] as String?;
     if (!tiposVerificacion.contains(tipo)) {
@@ -123,6 +149,45 @@ class Verificacion {
     );
   }
 }
+
+class RangoAjuste {
+  final double min;
+  final double max;
+  final double paso;
+  final String unidad;
+  const RangoAjuste(this.min, this.max, this.paso, this.unidad);
+}
+
+/// Ajuste personal de una verificación: otro umbral y/o desactivarla.
+class AjusteVerificacion {
+  final double? umbral;
+  final bool activa;
+
+  const AjusteVerificacion({this.umbral, this.activa = true});
+
+  factory AjusteVerificacion.fromJson(Map<String, dynamic> j) =>
+      AjusteVerificacion(umbral: (j['umbral'] as num?)?.toDouble(), activa: (j['activa'] ?? true) as bool);
+
+  Map<String, dynamic> toJson() => {if (umbral != null) 'umbral': umbral, 'activa': activa};
+}
+
+/// ejercicioId → código de verificación → ajuste. Mismo formato que acepta el
+/// servidor en el campo `ajustes`.
+typedef AjustesEjercicios = Map<String, Map<String, AjusteVerificacion>>;
+
+AjustesEjercicios ajustesDesdeJson(Map<String, dynamic> j) => {
+  for (final e in j.entries)
+    if (e.value is Map)
+      e.key: {
+        for (final v in (e.value as Map).entries)
+          if (v.value is Map) v.key as String: AjusteVerificacion.fromJson(Map<String, dynamic>.from(v.value as Map)),
+      },
+};
+
+Map<String, dynamic> ajustesAJson(AjustesEjercicios a) => {
+  for (final e in a.entries)
+    if (e.value.isNotEmpty) e.key: {for (final v in e.value.entries) v.key: v.value.toJson()},
+};
 
 /// Definición de un ejercicio: datos para la interfaz + reglas del motor.
 class EjercicioSpec {
@@ -162,6 +227,37 @@ class EjercicioSpec {
 
   String get faseIda => fases['ida'] ?? 'Ida';
   String get faseVuelta => fases['vuelta'] ?? 'Vuelta';
+
+  /// Copia con umbrales personalizados y sin las verificaciones desactivadas.
+  EjercicioSpec conAjustes(Map<String, AjusteVerificacion> ajustes) {
+    if (ajustes.isEmpty) return this;
+    final nuevas = <Verificacion>[];
+    for (final v in verificaciones) {
+      final a = ajustes[v.codigo];
+      if (a == null) {
+        nuevas.add(v);
+      } else if (a.activa) {
+        nuevas.add(a.umbral == null ? v : v.conUmbral(a.umbral!));
+      }
+    }
+    return EjercicioSpec(
+      id: id,
+      nombre: nombre,
+      categoria: categoria,
+      posicion: posicion,
+      dificultad: dificultad,
+      vistaRecomendada: vistaRecomendada,
+      objetivoRepeticiones: objetivoRepeticiones,
+      descripcion: descripcion,
+      musculos: musculos,
+      camara: camara,
+      pasos: pasos,
+      puntosRequeridos: puntosRequeridos,
+      fases: fases,
+      senal: senal,
+      verificaciones: nuevas,
+    );
+  }
 
   factory EjercicioSpec.fromJson(Map<String, dynamic> j) {
     final id = j['id'] as String;
@@ -276,6 +372,16 @@ class Especificacion {
 
   EjercicioSpec ejercicio(String id) =>
       ejercicios.firstWhere((e) => e.id == id, orElse: () => throw ArgumentError('Ejercicio no soportado: $id'));
+
+  /// Especificación con los objetivos personales del usuario aplicados.
+  Especificacion conAjustes(AjustesEjercicios ajustes) {
+    if (ajustes.values.every((m) => m.isEmpty)) return this;
+    return Especificacion(
+      version: version,
+      globales: globales,
+      ejercicios: [for (final e in ejercicios) e.conAjustes(ajustes[e.id] ?? const {})],
+    );
+  }
 
   EjercicioSpec? buscar(String id) {
     for (final e in ejercicios) {

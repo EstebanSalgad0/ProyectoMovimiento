@@ -1,12 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
-import '../../core/config/app_config.dart';
+import '../../modelos/esqueleto.dart';
 import '../../modelos/resultado_analisis.dart';
 import '../../motor/analizador.dart';
 import '../../motor/especificacion.dart';
@@ -14,8 +11,9 @@ import '../../motor/metricas.dart';
 import '../../motor/puntos.dart';
 import '../../motor/repeticiones.dart';
 import '../../servicios/voz_servicio.dart';
+import 'camara_pose.dart';
 
-enum EtapaSesion { iniciando, sinPermiso, sinCamara, error, encuadre, cuentaRegresiva, activa, finalizando }
+enum EtapaSesion { encuadre, cuentaRegresiva, activa, serieCompleta, finalizando }
 
 class AvisoEnVivo {
   final String titulo;
@@ -28,61 +26,88 @@ class AvisoEnVivo {
   AvisoEnVivo(this.titulo, {this.detalle, this.severidad}) : hora = DateTime.now();
 }
 
-/// Orquesta la cámara, la detección de pose de ML Kit (en el teléfono) y el
-/// motor de análisis. La pantalla solo escucha este controlador y dibuja.
+/// Resultado de una serie: análisis, esqueleto grabado y conteo final.
+class ResultadoSerie {
+  final ResultadoAnalisis resultado;
+  final EsqueletoGrabado? esqueleto;
+
+  /// Repeticiones según la regla de las pruebas funcionales: cuenta también la
+  /// última si al terminar el tiempo ya se había pasado la mitad del movimiento.
+  final int conteoFinal;
+  final Duration duracion;
+
+  const ResultadoSerie({
+    required this.resultado,
+    required this.esqueleto,
+    required this.conteoFinal,
+    required this.duracion,
+  });
+}
+
+/// Lógica de una serie en tiempo real sobre una [CamaraPose]: encuadre, cuenta
+/// regresiva, análisis con el motor local, avisos y fin de la serie (por
+/// objetivo de repeticiones, por tiempo o a mano).
 class ControladorTiempoReal extends ChangeNotifier {
+  final CamaraPose camara;
   final Especificacion spec;
-  final EjercicioSpec ejercicio;
   final VozServicio voz;
   bool vozActiva;
-  final bool preferirFrontal;
+  final bool vibracion;
+  final int segundosCuentaRegresiva;
+
+  EjercicioSpec ejercicio;
+  int objetivo;
+
+  /// Termina la serie sola al llegar al objetivo (rutinas guiadas).
+  bool autoFinalizar;
+
+  /// Duración fija (prueba de 30 s). null = sin límite.
+  Duration? limite;
 
   ControladorTiempoReal({
+    required this.camara,
     required this.spec,
     required this.ejercicio,
     required this.voz,
     required this.vozActiva,
-    required this.preferirFrontal,
-  });
+    this.vibracion = true,
+    this.segundosCuentaRegresiva = 3,
+    int? objetivo,
+    this.autoFinalizar = false,
+    this.limite,
+  }) : objetivo = objetivo ?? ejercicio.objetivoRepeticiones {
+    camara.alFotograma = _alFotograma;
+    camara.addListener(_reenviar);
+  }
 
-  // Cámara y detector
-  CameraController? camara;
-  CameraDescription? _descripcion;
-  List<CameraDescription> _camaras = const [];
-  final PoseDetector _detector = PoseDetector(
-    options: PoseDetectorOptions(mode: PoseDetectionMode.stream, model: PoseDetectionModel.base),
-  );
-  bool _procesando = false;
-  bool _cerrado = false;
-  final Stopwatch _base = Stopwatch()..start();
-  int _ultimoTMs = -1;
-
-  // Estado expuesto a la interfaz
-  EtapaSesion etapa = EtapaSesion.iniciando;
-  String? mensajeError;
-  List<Punto>? puntos;
-  Size? tamanoImagen;
-  InputImageRotation rotacion = InputImageRotation.rotation0deg;
-  CameraLensDirection lente = CameraLensDirection.front;
+  EtapaSesion etapa = EtapaSesion.encuadre;
   List<String> faltantes = const [];
   EstadoFotograma? estado;
-  int cuenta = AppConfig.cuentaRegresiva;
+  int cuenta = 3;
   AvisoEnVivo? aviso;
   RepeticionEvaluada? ultimaRep;
   DateTime _horaUltimaRep = DateTime.fromMillisecondsSinceEpoch(0);
   final Stopwatch reloj = Stopwatch();
 
   Analizador? _analizador;
+  final GrabadorEsqueleto _grabador = GrabadorEsqueleto();
   int _cuadrosEncuadrados = 0;
   Timer? _temporizador;
   DateTime _ultimoAvisoFaltantes = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _cerrado = false;
 
-  bool get puedeCambiarCamara => _camaras.length > 1;
   int get repeticiones => _analizador?.repeticiones.length ?? 0;
   bool get hayRepeticiones => repeticiones > 0;
 
   /// Avance del movimiento actual (0 = reposo, 1 = rango mínimo alcanzado).
   double get progresoMovimiento => _analizador?.detector.progreso(estado?.valorSenal) ?? 0;
+
+  Duration? get tiempoRestante {
+    final l = limite;
+    if (l == null) return null;
+    final r = l - reloj.elapsed;
+    return r.isNegative ? Duration.zero : r;
+  }
 
   String get textoFase => switch (estado?.fase) {
     Fase.ida => ejercicio.faseIda,
@@ -100,179 +125,30 @@ class ControladorTiempoReal extends ChangeNotifier {
     };
   }
 
-  /// Notifica solo si la pantalla sigue abierta (hay esperas asíncronas de la
-  /// cámara que pueden terminar después de cerrar).
   void _notificar() {
     if (!_cerrado) notifyListeners();
   }
 
-  // ------------------------------------------------------------------ cámara
-  Future<void> iniciar() async {
-    etapa = EtapaSesion.iniciando;
-    mensajeError = null;
+  void _reenviar() => _notificar();
+
+  /// Prepara una nueva serie (otro ejercicio u objetivo) sin cerrar la cámara.
+  void prepararSerie({EjercicioSpec? ejercicio, int? objetivo, Duration? limite}) {
+    _temporizador?.cancel();
+    if (ejercicio != null) this.ejercicio = ejercicio;
+    this.objetivo = objetivo ?? this.ejercicio.objetivoRepeticiones;
+    if (limite != null) this.limite = limite;
+    _analizador = null;
+    _grabador.reiniciar();
+    estado = null;
+    ultimaRep = null;
+    aviso = null;
+    faltantes = const [];
+    _cuadrosEncuadrados = 0;
+    reloj
+      ..stop()
+      ..reset();
+    etapa = EtapaSesion.encuadre;
     _notificar();
-    try {
-      _camaras = await availableCameras();
-    } on CameraException catch (e) {
-      _fallar(e);
-      return;
-    }
-    if (_camaras.isEmpty) {
-      etapa = EtapaSesion.sinCamara;
-      _notificar();
-      return;
-    }
-    final preferida = preferirFrontal ? CameraLensDirection.front : CameraLensDirection.back;
-    await _abrir(_camaras.firstWhere((c) => c.lensDirection == preferida, orElse: () => _camaras.first));
-  }
-
-  Future<void> _abrir(CameraDescription descripcion) async {
-    final anterior = camara;
-    camara = null;
-    _notificar();
-    await _cerrarCamara(anterior);
-
-    final c = CameraController(
-      descripcion,
-      ResolutionPreset.medium,
-      enableAudio: false,
-      imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
-    );
-    try {
-      await c.initialize();
-      if (_cerrado) {
-        await c.dispose();
-        return;
-      }
-      await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
-      _descripcion = descripcion;
-      lente = descripcion.lensDirection;
-      camara = c;
-      puntos = null;
-      await c.startImageStream(_procesarImagen);
-      if (etapa == EtapaSesion.iniciando) etapa = EtapaSesion.encuadre;
-    } on CameraException catch (e) {
-      await c.dispose();
-      _fallar(e);
-      return;
-    }
-    _notificar();
-  }
-
-  void _fallar(CameraException e) {
-    const sinPermiso = {'CameraAccessDenied', 'CameraAccessDeniedWithoutPrompt', 'CameraAccessRestricted'};
-    etapa = sinPermiso.contains(e.code) ? EtapaSesion.sinPermiso : EtapaSesion.error;
-    mensajeError = e.description ?? e.code;
-    _notificar();
-  }
-
-  Future<void> _cerrarCamara(CameraController? c) async {
-    if (c == null) return;
-    try {
-      if (c.value.isStreamingImages) await c.stopImageStream();
-    } catch (_) {}
-    await c.dispose();
-  }
-
-  Future<void> cambiarCamara() async {
-    if (!puedeCambiarCamara) return;
-    final otra = _camaras.firstWhere((c) => c.lensDirection != lente, orElse: () => _camaras.first);
-    await _abrir(otra);
-  }
-
-  /// La app pasó a segundo plano: se libera la cámara.
-  Future<void> pausar() async {
-    final c = camara;
-    camara = null;
-    reloj.stop();
-    _notificar();
-    await _cerrarCamara(c);
-  }
-
-  Future<void> reanudar() async {
-    final d = _descripcion;
-    if (_cerrado || d == null || camara != null) return;
-    await _abrir(d);
-    if (etapa == EtapaSesion.activa) reloj.start();
-  }
-
-  // ------------------------------------------------------------- detección
-  InputImage? _aInputImage(CameraImage imagen) {
-    final c = camara;
-    final d = _descripcion;
-    if (c == null || d == null) return null;
-    final orientaciones = {
-      DeviceOrientation.portraitUp: 0,
-      DeviceOrientation.landscapeLeft: 90,
-      DeviceOrientation.portraitDown: 180,
-      DeviceOrientation.landscapeRight: 270,
-    };
-    InputImageRotation? rot;
-    if (Platform.isIOS) {
-      rot = InputImageRotationValue.fromRawValue(d.sensorOrientation);
-    } else {
-      var compensacion = orientaciones[c.value.deviceOrientation];
-      if (compensacion == null) return null;
-      compensacion = d.lensDirection == CameraLensDirection.front
-          ? (d.sensorOrientation + compensacion) % 360
-          : (d.sensorOrientation - compensacion + 360) % 360;
-      rot = InputImageRotationValue.fromRawValue(compensacion);
-    }
-    if (rot == null) return null;
-    final formato = InputImageFormatValue.fromRawValue(imagen.format.raw as int);
-    if (formato == null ||
-        (Platform.isAndroid && formato != InputImageFormat.nv21) ||
-        (Platform.isIOS && formato != InputImageFormat.bgra8888)) {
-      return null;
-    }
-    if (imagen.planes.length != 1) return null;
-    final plano = imagen.planes.first;
-    rotacion = rot;
-    return InputImage.fromBytes(
-      bytes: plano.bytes,
-      metadata: InputImageMetadata(
-        size: Size(imagen.width.toDouble(), imagen.height.toDouble()),
-        rotation: rot,
-        format: formato,
-        bytesPerRow: plano.bytesPerRow,
-      ),
-    );
-  }
-
-  Future<void> _procesarImagen(CameraImage imagen) async {
-    // Si el detector sigue ocupado se descarta el cuadro: siempre se analiza el más reciente.
-    if (_procesando || _cerrado) return;
-    _procesando = true;
-    try {
-      final entrada = _aInputImage(imagen);
-      if (entrada == null) return;
-      final poses = await _detector.processImage(entrada);
-      if (_cerrado) return;
-      var tMs = _base.elapsedMilliseconds;
-      if (tMs <= _ultimoTMs) tMs = _ultimoTMs + 1;
-      _ultimoTMs = tMs;
-      tamanoImagen = Size(imagen.width.toDouble(), imagen.height.toDouble());
-
-      Fotograma fotograma;
-      if (poses.isEmpty) {
-        puntos = null;
-        fotograma = Fotograma(tMs);
-      } else {
-        final marcas = poses.first.landmarks;
-        final lista = List<Punto>.generate(numPuntos, (i) {
-          final m = marcas[PoseLandmarkType.values[i]];
-          return m == null ? Punto.ausente : Punto(m.x, m.y, m.z, m.likelihood);
-        });
-        puntos = lista;
-        fotograma = Fotograma(tMs, imagen: lista);
-      }
-      _alFotograma(fotograma);
-      _notificar();
-    } catch (e) {
-      debugPrint('Error de detección: $e');
-    } finally {
-      _procesando = false;
-    }
   }
 
   // ------------------------------------------------------- lógica de sesión
@@ -293,6 +169,9 @@ class ControladorTiempoReal extends ChangeNotifier {
         final e = _analizador!.procesar(f);
         estado = e;
         faltantes = e.faltantes;
+        _grabador
+          ..aspecto = camara.aspecto
+          ..agregar(f.tMs, camara.puntosNormalizados(indicesEsqueleto));
         final rep = e.nuevaRepeticion;
         if (rep != null) _alRepeticion(rep);
         if (e.repeticionIncompleta) {
@@ -306,6 +185,12 @@ class ControladorTiempoReal extends ChangeNotifier {
           _hablar('Completa el movimiento');
         }
         if (!e.valido && faltantes.isNotEmpty) _avisarFaltantes();
+        final l = limite;
+        if (l != null && reloj.elapsed >= l) {
+          _completarSerie('¡Tiempo!');
+        } else if (autoFinalizar && repeticiones >= objetivo) {
+          _completarSerie('¡Serie completada!');
+        }
       default:
         break;
     }
@@ -313,7 +198,7 @@ class ControladorTiempoReal extends ChangeNotifier {
 
   void _iniciarCuentaRegresiva() {
     etapa = EtapaSesion.cuentaRegresiva;
-    cuenta = AppConfig.cuentaRegresiva;
+    cuenta = segundosCuentaRegresiva;
     _hablar('Prepárate', prioritario: true);
     _temporizador?.cancel();
     _temporizador = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -321,6 +206,8 @@ class ControladorTiempoReal extends ChangeNotifier {
       if (cuenta <= 0) {
         t.cancel();
         _comenzar();
+      } else if (cuenta <= 3) {
+        _hablar('$cuenta', prioritario: true);
       }
       _notificar();
     });
@@ -335,19 +222,54 @@ class ControladorTiempoReal extends ChangeNotifier {
 
   void _comenzar() {
     _analizador = Analizador(spec, ejercicio.id);
+    _grabador.reiniciar();
     etapa = EtapaSesion.activa;
     reloj
       ..reset()
       ..start();
-    _avisar(AvisoEnVivo('¡Comienza!', detalle: '${ejercicio.objetivoRepeticiones} repeticiones como objetivo'));
+    final l = limite;
+    if (l != null) {
+      // Revisa el tiempo aunque no lleguen cuadros (persona fuera de cuadro).
+      _temporizador?.cancel();
+      _temporizador = Timer.periodic(const Duration(milliseconds: 250), (t) {
+        if (etapa != EtapaSesion.activa) {
+          t.cancel();
+        } else if (reloj.elapsed >= l) {
+          t.cancel();
+          _completarSerie('¡Tiempo!');
+        } else {
+          _notificar();
+        }
+      });
+    }
+    _avisar(
+      AvisoEnVivo(
+        '¡Comienza!',
+        detalle: l != null ? '${l.inSeconds} segundos: todas las que puedas' : '$objetivo repeticiones como objetivo',
+      ),
+    );
     _hablar('Comienza', prioritario: true);
     _notificar();
   }
 
+  void _completarSerie(String mensaje) {
+    if (etapa != EtapaSesion.activa) return;
+    etapa = EtapaSesion.serieCompleta;
+    reloj.stop();
+    _temporizador?.cancel();
+    if (vibracion) HapticFeedback.heavyImpact();
+    _avisar(AvisoEnVivo(mensaje));
+    _hablar(mensaje, prioritario: true);
+    _notificar();
+  }
+
+  /// Termina la serie a mano (botón).
+  void terminarSerie() => _completarSerie('Serie terminada');
+
   void _alRepeticion(RepeticionEvaluada rep) {
     ultimaRep = rep;
     _horaUltimaRep = DateTime.now();
-    HapticFeedback.mediumImpact();
+    if (vibracion) HapticFeedback.mediumImpact();
     if (rep.fallos.isEmpty) {
       _avisar(AvisoEnVivo('Repetición ${rep.numero} correcta'));
       _hablar('${rep.numero}', prioritario: true);
@@ -380,28 +302,37 @@ class ControladorTiempoReal extends ChangeNotifier {
     _notificar();
   }
 
-  /// Detiene la cámara y devuelve el resultado (null si no hubo sesión activa).
-  Future<ResultadoAnalisis?> finalizar() async {
-    etapa = EtapaSesion.finalizando;
-    reloj.stop();
-    _notificar();
-    _temporizador?.cancel();
-    final c = camara;
-    camara = null;
-    await _cerrarCamara(c);
+  /// Resultado de la serie actual (sin cerrar la cámara). null si no empezó.
+  ResultadoSerie? tomarResultado() {
     final a = _analizador;
     if (a == null) return null;
-    return ResultadoAnalisis.fromJson(a.resultado());
+    final d = a.detector;
+    final extra = d.enMovimiento && (d.picoValido || d.progreso(estado?.valorSenal) >= 0.5) ? 1 : 0;
+    return ResultadoSerie(
+      resultado: ResultadoAnalisis.fromJson(a.resultado()),
+      esqueleto: _grabador.resultado(),
+      conteoFinal: a.repeticiones.length + extra,
+      duracion: reloj.elapsed,
+    );
+  }
+
+  /// Termina la sesión: detiene la cámara y entrega el resultado.
+  Future<ResultadoSerie?> finalizar() async {
+    if (etapa == EtapaSesion.activa) reloj.stop();
+    etapa = EtapaSesion.finalizando;
+    _temporizador?.cancel();
+    _notificar();
+    final r = tomarResultado();
+    await camara.pausar();
+    return r;
   }
 
   @override
   void dispose() {
     _cerrado = true;
     _temporizador?.cancel();
-    final c = camara;
-    camara = null;
-    _cerrarCamara(c);
-    _detector.close();
+    camara.removeListener(_reenviar);
+    if (camara.alFotograma == _alFotograma) camara.alFotograma = null;
     voz.detener();
     super.dispose();
   }

@@ -10,3 +10,5 @@ app/.idea/
 app/android/.gradle/
 app/android/local.properties
 app/ios/Pods/
+# Capturas: diferencias generadas por pruebas golden
+app/test_capturas/failures/

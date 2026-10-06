@@ -1,170 +1,109 @@
-# Proyecto Movimiento App (IA + Flutter)
+# Proyecto Movimiento — Análisis de movimiento con IA (Flutter + Python)
 
-Este repositorio contiene un prototipo de aplicación móvil en Flutter junto con un servidor backend en Python que ejecuta un modelo de Inteligencia Artificial (MediaPipe) para analizar movimientos corporales a partir de video.
+Aplicación móvil para **Android e iOS** que analiza la técnica de ejercicios a partir de la cámara del
+teléfono. Detecta 33 puntos del cuerpo, cuenta repeticiones, evalúa cada una y entrega correcciones
+claras, en tiempo real o a partir de un video.
 
-El proyecto está pensado como una guía de apoyo para actividad física y ejercicios. Su objetivo es ofrecer retroalimentación visual sobre la ejecución del movimiento para ayudar a identificar detalles de técnica, postura y ejecución durante una práctica. En esta etapa, la idea es servir como una referencia inicial para entrenamiento, orientación corporal y validación de movimientos básicos a través de video.
+> Prototipo en desarrollo (TRL 3–4). Es un apoyo para la práctica de ejercicio y **no reemplaza la
+> evaluación de un profesional de la salud**. Los umbrales del análisis aún deben validarse clínicamente.
 
-Como prototipo, el sistema está orientado principalmente a pruebas funcionales y demostraciones del flujo completo entre la captura de video, el análisis del movimiento y la visualización de resultados. No pretende reemplazar la evaluación profesional ni ofrecer diagnósticos médicos; su función es acompañar al usuario con información útil para mejorar la comprensión de su movimiento.
+<p align="center">
+  <img src="docs/capturas/03_inicio.png" width="23%" alt="Inicio">
+  <img src="docs/capturas/05_catalogo.png" width="23%" alt="Catálogo de ejercicios">
+  <img src="docs/capturas/08_resultado.png" width="23%" alt="Resultado">
+  <img src="docs/capturas/13_resultado_oscuro.png" width="23%" alt="Resultado en modo oscuro">
+</p>
 
-## ¿Para qué sirve?
+## Qué hace
 
-- Dar una referencia visual sobre cómo se está ejecutando un movimiento.
-- Apoyar rutinas de ejercicio o actividades físicas con retroalimentación básica.
-- Probar un flujo de análisis de movimiento en tiempo real o casi en tiempo real.
-- Servir como base para futuras mejoras en precisión, cobertura de ejercicios y experiencia de usuario.
+- **Tiempo real en el teléfono** (sin servidor ni internet): guía de encuadre, cuenta regresiva,
+  esqueleto sobre la cámara, contador de repeticiones, avisos visuales y por voz.
+- **Análisis de video** en el servidor (grabar o elegir de la galería).
+- **Resultado detallado:** puntaje, gráfico del movimiento, detalle por repetición, correcciones
+  priorizadas, aciertos y calidad del registro.
+- **Progreso:** evolución del puntaje, correcciones más frecuentes e historial.
+- **6 ejercicios:** sentadilla, zancada, curl de bíceps sentado, press de hombros sentado, elevación
+  lateral y sentarse-pararse.
 
-## Guía de uso rápida
+## Cómo funciona
 
-1. Levanta el servidor de análisis en tu computadora.
-2. Abre la aplicación móvil en un emulador o en un dispositivo físico.
-3. Concede los permisos necesarios para usar la cámara, si la app los solicita.
-4. Inicia la captura o el flujo de análisis desde la pantalla principal.
-5. Realiza el movimiento o ejercicio frente a la cámara.
-6. Revisa la retroalimentación generada por el sistema para observar cómo se está ejecutando el gesto o postura.
+```
+compartido/ejercicios.json   ← reglas únicas: ejercicios, umbrales, códigos y mensajes
+        │
+        ├── app/lib/motor/      motor en Dart  → tiempo real con ML Kit en el teléfono
+        └── servidor/motor/     motor en Python → análisis de video con MediaPipe
+```
 
-## Alcance actual
+Ambos motores aplican las mismas reglas y se verifican con los mismos escenarios de prueba
+(`compartido/fixtures/`), por lo que un ejercicio se evalúa igual en vivo que por video.
 
-- Es un prototipo funcional, no una versión final.
-- El análisis se centra en la lectura de movimiento desde video.
-- La utilidad principal es informativa y de apoyo, no clínica.
-- El proyecto puede extenderse después con más ejercicios, métricas y validaciones.
+Por cada ejercicio, el motor: (1) calcula ángulos y alineaciones (normalizados por tamaño corporal),
+(2) los suaviza (filtro One Euro), (3) detecta repeticiones con una máquina de estados y (4) evalúa cada
+repetición con reglas por severidad, considerando la vista de la cámara (frente o costado).
 
----
+## Estructura
 
-# Estructura del Proyecto
+| Carpeta | Contenido |
+|---------|-----------|
+| `app/` | App Flutter (Riverpod, go_router, cámara + ML Kit, gráficos). Ver [app/README.md](app/README.md). |
+| `servidor/` | API FastAPI + motor Python + herramienta de webcam. Ver [servidor/README.md](servidor/README.md). |
+| `compartido/` | Especificación de ejercicios y escenarios de prueba comunes. |
+| `docs/` | [Propuesta de mejoras](docs/PROPUESTA_MEJORAS.md), [plan de implementación](docs/PLAN_IMPLEMENTACION.md) y capturas. |
 
-- `/app`: Código fuente de la aplicación móvil (Flutter).
-- `/servidor`: Código fuente del modelo de IA y la API (Python/FastAPI).
+## Inicio rápido
 
----
+### 1. Servidor (solo necesario para analizar videos)
 
-# 1. Configuración y Ejecución del Servidor (IA)
-
-## Requisitos
-
-- Python 3.10+ (recomendado 3.12): se usa para ejecutar el servidor y las librerías de análisis.
-- Webcam funcional: necesaria para capturar el movimiento que luego será procesado por el modelo de IA.
-
-## Instalación
-
-1. Abre una terminal y navega a la carpeta del servidor. Esto te coloca dentro del módulo que contiene el modelo y la API:
+Requiere Python 3.10+ (recomendado 3.12).
 
 ```bash
 cd servidor
-```
-
-2. Crea un entorno virtual. Esto aísla las dependencias del proyecto para evitar conflictos con otros entornos de Python:
-
-### Windows
-
-```bash
 python -m venv venv
-```
-
-### Linux/macOS
-
-```bash
-python3 -m venv venv
-```
-
-3. Activa el entorno virtual. Al hacerlo, los comandos de Python y pip quedarán apuntando al entorno del proyecto:
-
-### Windows
-
-```bash
-venv\Scripts\activate
-```
-
-### Linux/macOS
-
-```bash
-source venv/bin/activate
-```
-
-4. Instala las dependencias. Con este comando se descargan todas las librerías necesarias para el servidor y el modelo:
-
-```bash
+# Windows: venv\Scripts\activate   ·   Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
-```
-
----
-
-## Ejecución del Servidor
-
-Levanta la API con Uvicorn para recibir peticiones desde la App. Este proceso deja el servidor escuchando solicitudes desde Flutter:
-
-```bash
 uvicorn servidor:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Verifica que el servidor responde entrando en tu navegador a esta dirección. Si ves una respuesta, significa que el backend quedó levantado correctamente:
+Comprueba que responde en <http://localhost:8000/salud>.
 
-```text
-http://localhost:8000
-```
+### 2. App
 
----
-
-# 2. Configuración y Ejecución de la App (Flutter)
-
-## Requisitos
-
-- Flutter SDK instalado: necesario para compilar y ejecutar la app móvil.
-- Android Studio (Emulador) o dispositivo físico configurado para depuración: sirve para probar la interfaz y el flujo de análisis.
-
-## Instalación y Ejecución
-
-1. Abre una nueva terminal y navega a la carpeta de la app. Aquí se encuentra la interfaz móvil del proyecto:
+Requiere Flutter 3.44 o superior (probado con 3.47). iOS 15.5+ y Android 7.0 (API 24)+.
 
 ```bash
 cd app
-```
-
-2. Descarga las dependencias de Flutter. Este paso instala los paquetes usados por la aplicación para construir la interfaz y comunicarla con el servidor:
-
-```bash
 flutter pub get
-```
-
-3. Ejecuta la aplicación. Flutter compilará la app y la abrirá en el dispositivo o emulador seleccionado:
-
-```bash
 flutter run
 ```
 
----
+Credenciales de demostración: `usuario.prueba` / `1234` (botón **Usar** en la pantalla de login).
 
-# ⚠️ Importante — Conexión App → Servidor
+### Conexión app → servidor
 
-- Si pruebas en un **Emulador de Android**, la IP para conectarse al servidor local (tu PC) no es `localhost`, debes usar:
+La dirección se cambia en la app: **Cuenta → Servidor de análisis de video → Cambiar** (con botón
+**Probar**). También puede fijarse al compilar: `flutter run --dart-define=API_URL=http://192.168.1.50:8000`.
 
-```text
-10.0.2.2:8000
+- Emulador de Android: `http://10.0.2.2:8000` (valor por defecto).
+- Simulador de iOS: `http://localhost:8000`.
+- Teléfono físico: la IP local del computador, en la misma red Wi-Fi.
+
+> El modo **tiempo real** funciona sin servidor. La detección de pose en vivo usa ML Kit, que requiere un
+> dispositivo físico o un emulador con cámara; en iOS conviene probar en un iPhone real.
+
+## Pruebas
+
+```bash
+cd servidor && pip install -r requirements-dev.txt && pytest      # 32 tests
+cd app && flutter analyze && flutter test                         # 42 tests
+cd app && flutter test test_capturas --update-goldens             # regenera docs/capturas
 ```
 
-- Si pruebas en un **Teléfono Físico**, asegúrate de que el teléfono y el PC estén en la misma red Wi-Fi y usa la IP local de tu computadora:
+## Documentación
 
-```text
-192.168.1.X:8000
-```
-
----
-
-# 3. Flujo recomendado de prueba
-
-1. Inicia primero el servidor para asegurarte de que el modelo de análisis esté disponible.
-2. Luego abre la app Flutter en el emulador o teléfono.
-3. Comprueba que la app pueda comunicarse con la dirección correcta del backend.
-4. Haz una prueba simple con un movimiento claro y visible frente a la cámara.
-5. Revisa el resultado y ajusta la postura o el gesto para observar cambios en la retroalimentación.
-
-## Notas del prototipo
-
-- Este proyecto está en fase de prototipo, así que la prioridad actual es validar la idea y el flujo general.
-- La salida del sistema debe interpretarse como apoyo visual, no como evaluación definitiva.
-- El objetivo es sentar una base para mejorar después el análisis, la interfaz y los tipos de ejercicios soportados.
-
----
+- [Propuesta de mejoras](docs/PROPUESTA_MEJORAS.md): diagnóstico del prototipo original, qué se
+  implementó y qué falta (modelo, app, escala y cumplimiento).
+- [Plan de implementación](docs/PLAN_IMPLEMENTACION.md): fases hacia TRL 4–5 con tareas y criterios de
+  aceptación.
 
 ## Autores
 

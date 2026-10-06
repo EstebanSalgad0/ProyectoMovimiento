@@ -1,0 +1,607 @@
+{
+  "version": "2.0.0",
+  "descripcion": "Especificación compartida del motor de análisis. Fuente única de verdad para la app (tiempo real) y el servidor (video). Los umbrales son valores iniciales y DEBEN validarse con profesionales de la salud.",
+  "parametros_globales": {
+    "visibilidad_minima": 0.5,
+    "fps_analisis": 12,
+    "suavizado": { "min_cutoff": 1.2, "beta": 0.04, "d_cutoff": 1.0 },
+    "reinicio_filtro_s": 1.0,
+    "vista": { "umbral_frontal": 0.5, "umbral_lateral": 0.3 },
+    "penalizacion": { "alta": 30, "moderada": 15, "leve": 5, "info": 0 },
+    "penalizacion_incompleta": 5,
+    "penalizacion_incompleta_max": 15,
+    "porcentaje_validos_minimo": 0.5,
+    "duracion_minima_rep_s": 0.4,
+    "puntos_serie_max": 300
+  },
+  "ejercicios": [
+    {
+      "id": "sentadilla",
+      "nombre": "Sentadilla",
+      "categoria": "tren_inferior",
+      "posicion": "de_pie",
+      "dificultad": "basica",
+      "vista_recomendada": "lateral",
+      "objetivo_repeticiones": 10,
+      "descripcion": "Ejercicio base de fuerza para piernas y glúteos. Evalúa profundidad, alineación de rodillas, postura del tronco y ritmo.",
+      "musculos": ["Cuádriceps", "Glúteos", "Isquiotibiales", "Core"],
+      "camara": "Ubica el teléfono a unos 2,5 m, a la altura de la cadera y de costado para evaluar profundidad y tronco. De frente evalúa la alineación de rodillas.",
+      "pasos": [
+        "Pies al ancho de los hombros y puntas levemente hacia afuera.",
+        "Lleva la cadera hacia atrás y abajo, como si te sentaras.",
+        "Baja hasta que los muslos queden cerca de la horizontal.",
+        "Mantén el pecho erguido y las rodillas en línea con los pies.",
+        "Sube empujando el suelo hasta quedar completamente de pie."
+      ],
+      "puntos_requeridos": ["hombros", "caderas", "rodillas", "tobillos"],
+      "fases": { "ida": "Bajando", "vuelta": "Subiendo" },
+      "senal": {
+        "metrica": "rodilla_promedio",
+        "nombre": "Ángulo de rodilla",
+        "unidad": "°",
+        "direccion": "descendente",
+        "inicio": 145,
+        "fin": 155,
+        "minimo_rep": 125
+      },
+      "verificaciones": [
+        {
+          "codigo": "SQ_PROFUNDIDAD",
+          "tipo": "pico_max",
+          "metrica": "rodilla_promedio",
+          "umbral": 110,
+          "severidad": "moderada",
+          "zona": "rodillas",
+          "titulo": "Profundidad insuficiente",
+          "mensaje": "Baja un poco más: intenta llegar a unos 90–100° de rodilla (muslos cerca de la horizontal).",
+          "mensaje_ok": "Buena profundidad en tus repeticiones."
+        },
+        {
+          "codigo": "SQ_PROFUNDIDAD_EXCESIVA",
+          "tipo": "pico_min",
+          "metrica": "rodilla_promedio",
+          "umbral": 60,
+          "severidad": "leve",
+          "zona": "rodillas",
+          "titulo": "Descenso muy profundo",
+          "mensaje": "Controla el descenso; si sientes molestias, no bajes tanto."
+        },
+        {
+          "codigo": "SQ_VALGO",
+          "tipo": "rep_max",
+          "metrica": "valgo_max",
+          "umbral": 0.2,
+          "severidad": "alta",
+          "zona": "rodillas",
+          "vistas": ["frontal"],
+          "titulo": "Rodillas hacia adentro",
+          "mensaje": "Empuja las rodillas hacia afuera, alineadas con la punta de los pies.",
+          "mensaje_ok": "Rodillas bien alineadas con los pies."
+        },
+        {
+          "codigo": "SQ_ASIMETRIA",
+          "tipo": "asimetria_pico",
+          "metricas": ["rodilla_izq", "rodilla_der"],
+          "umbral": 15,
+          "severidad": "moderada",
+          "zona": "rodillas",
+          "vistas": ["frontal"],
+          "titulo": "Carga desigual entre piernas",
+          "mensaje": "Reparte el peso por igual entre ambas piernas.",
+          "mensaje_ok": "Carga simétrica entre ambas piernas."
+        },
+        {
+          "codigo": "SQ_TRONCO",
+          "tipo": "pico_max",
+          "metrica": "tronco_inclinacion",
+          "umbral": 45,
+          "severidad": "moderada",
+          "zona": "tronco",
+          "vistas": ["lateral"],
+          "titulo": "Tronco muy inclinado",
+          "mensaje": "Mantén el pecho más erguido: lleva la cadera atrás sin dejar caer el tronco.",
+          "mensaje_ok": "Buena postura del tronco."
+        },
+        {
+          "codigo": "SQ_PELVIS",
+          "tipo": "rep_max",
+          "metrica": "pelvis_inclinacion",
+          "umbral": 8,
+          "severidad": "leve",
+          "zona": "cadera",
+          "vistas": ["frontal"],
+          "titulo": "Pelvis desnivelada",
+          "mensaje": "Mantén la pelvis nivelada durante todo el movimiento.",
+          "mensaje_ok": "Pelvis estable."
+        },
+        {
+          "codigo": "SQ_RITMO",
+          "tipo": "duracion_min",
+          "fase": "excentrica",
+          "umbral": 0.6,
+          "severidad": "leve",
+          "zona": "general",
+          "titulo": "Descenso muy rápido",
+          "mensaje": "Baja de forma más controlada, en unos 2 segundos.",
+          "mensaje_ok": "Ritmo de descenso controlado."
+        }
+      ]
+    },
+    {
+      "id": "zancada",
+      "nombre": "Zancada",
+      "categoria": "tren_inferior",
+      "posicion": "de_pie",
+      "dificultad": "intermedia",
+      "vista_recomendada": "lateral",
+      "objetivo_repeticiones": 10,
+      "descripcion": "Trabajo unilateral de piernas que exige equilibrio. Evalúa la flexión de ambas rodillas, la postura del tronco y la alineación de la rodilla delantera.",
+      "musculos": ["Cuádriceps", "Glúteos", "Aductores", "Core"],
+      "camara": "Ubica el teléfono de costado, a unos 2,5–3 m, de modo que se vean ambos pies durante todo el paso.",
+      "pasos": [
+        "Parte de pie, con los pies al ancho de la cadera.",
+        "Da un paso largo hacia adelante.",
+        "Baja hasta que ambas rodillas formen cerca de 90°.",
+        "Mantén el tronco erguido y la rodilla delantera sobre el pie.",
+        "Empuja con la pierna delantera para volver al inicio."
+      ],
+      "puntos_requeridos": ["hombros", "caderas", "rodillas", "tobillos"],
+      "fases": { "ida": "Bajando", "vuelta": "Subiendo" },
+      "senal": {
+        "metrica": "rodilla_min",
+        "nombre": "Rodilla delantera",
+        "unidad": "°",
+        "direccion": "descendente",
+        "inicio": 145,
+        "fin": 155,
+        "minimo_rep": 125
+      },
+      "verificaciones": [
+        {
+          "codigo": "LU_PROFUNDIDAD",
+          "tipo": "pico_max",
+          "metrica": "rodilla_min",
+          "umbral": 110,
+          "severidad": "moderada",
+          "zona": "rodillas",
+          "titulo": "Flexión insuficiente",
+          "mensaje": "Baja más, hasta que la rodilla delantera forme cerca de 90°.",
+          "mensaje_ok": "Buena flexión de la rodilla delantera."
+        },
+        {
+          "codigo": "LU_RODILLA_TRASERA",
+          "tipo": "pico_max",
+          "metrica": "rodilla_max",
+          "umbral": 140,
+          "severidad": "leve",
+          "zona": "rodillas",
+          "vistas": ["lateral"],
+          "titulo": "Pierna trasera poco flexionada",
+          "mensaje": "Flexiona también la rodilla trasera y llévala hacia el suelo.",
+          "mensaje_ok": "Buena flexión de la pierna trasera."
+        },
+        {
+          "codigo": "LU_TRONCO",
+          "tipo": "rep_max",
+          "metrica": "tronco_inclinacion",
+          "umbral": 25,
+          "severidad": "moderada",
+          "zona": "tronco",
+          "titulo": "Tronco inclinado",
+          "mensaje": "Mantén el tronco erguido durante todo el descenso.",
+          "mensaje_ok": "Tronco erguido durante el paso."
+        },
+        {
+          "codigo": "LU_VALGO",
+          "tipo": "rep_max",
+          "metrica": "valgo_delantera",
+          "umbral": 0.2,
+          "severidad": "alta",
+          "zona": "rodillas",
+          "vistas": ["frontal"],
+          "titulo": "Rodilla delantera hacia adentro",
+          "mensaje": "Mantén la rodilla delantera alineada con el pie, sin que se vaya hacia adentro.",
+          "mensaje_ok": "Rodilla delantera alineada."
+        },
+        {
+          "codigo": "LU_PELVIS",
+          "tipo": "rep_max",
+          "metrica": "pelvis_inclinacion",
+          "umbral": 10,
+          "severidad": "leve",
+          "zona": "cadera",
+          "vistas": ["frontal"],
+          "titulo": "Pelvis desnivelada",
+          "mensaje": "Mantén la cadera nivelada y estable durante el paso.",
+          "mensaje_ok": "Cadera estable."
+        }
+      ]
+    },
+    {
+      "id": "curl_biceps_sentado",
+      "nombre": "Curl de bíceps sentado",
+      "categoria": "tren_superior",
+      "posicion": "sentado",
+      "dificultad": "basica",
+      "vista_recomendada": "frontal",
+      "objetivo_repeticiones": 12,
+      "descripcion": "Flexión de codos con ambos brazos a la vez. Evalúa el recorrido completo, la estabilidad de los codos, la simetría y el balanceo del tronco.",
+      "musculos": ["Bíceps", "Braquial", "Antebrazo"],
+      "camara": "Ubica el teléfono de frente, a 1,5–2 m y a la altura del pecho. Debe verse desde la cabeza hasta la cadera.",
+      "pasos": [
+        "Siéntate con la espalda apoyada y los pies en el suelo.",
+        "Brazos extendidos a los costados, palmas hacia adelante.",
+        "Flexiona ambos codos a la vez llevando las manos hacia los hombros.",
+        "Mantén los codos pegados al torso.",
+        "Baja de forma controlada hasta extender por completo."
+      ],
+      "puntos_requeridos": ["hombros", "codos", "munecas", "caderas"],
+      "fases": { "ida": "Subiendo", "vuelta": "Bajando" },
+      "senal": {
+        "metrica": "codo_promedio",
+        "nombre": "Ángulo de codo",
+        "unidad": "°",
+        "direccion": "descendente",
+        "inicio": 130,
+        "fin": 140,
+        "minimo_rep": 100
+      },
+      "verificaciones": [
+        {
+          "codigo": "CU_RANGO_ARRIBA",
+          "tipo": "pico_max",
+          "metrica": "codo_promedio",
+          "umbral": 70,
+          "severidad": "moderada",
+          "zona": "codos",
+          "titulo": "Recorrido incompleto arriba",
+          "mensaje": "Flexiona más el codo y lleva la mano hacia el hombro.",
+          "mensaje_ok": "Buen recorrido de flexión."
+        },
+        {
+          "codigo": "CU_EXTENSION",
+          "tipo": "reposo_min",
+          "metrica": "codo_promedio",
+          "umbral": 150,
+          "severidad": "leve",
+          "zona": "codos",
+          "titulo": "Extensión incompleta",
+          "mensaje": "Extiende completamente los brazos al bajar el peso.",
+          "mensaje_ok": "Extensión completa entre repeticiones."
+        },
+        {
+          "codigo": "CU_CODO_DESPEGADO",
+          "tipo": "rep_max",
+          "metrica": "hombro_max",
+          "umbral": 35,
+          "severidad": "moderada",
+          "zona": "hombros",
+          "titulo": "Codos se despegan del torso",
+          "mensaje": "Mantén los codos pegados al costado; mueve solo el antebrazo.",
+          "mensaje_ok": "Codos estables junto al torso."
+        },
+        {
+          "codigo": "CU_ASIMETRIA",
+          "tipo": "asimetria_pico",
+          "metricas": ["codo_izq", "codo_der"],
+          "umbral": 20,
+          "severidad": "leve",
+          "zona": "codos",
+          "titulo": "Brazos desiguales",
+          "mensaje": "Sube ambos brazos al mismo ritmo y a la misma altura.",
+          "mensaje_ok": "Movimiento simétrico entre brazos."
+        },
+        {
+          "codigo": "CU_BALANCEO",
+          "tipo": "rep_rango_max",
+          "metrica": "tronco_inclinacion",
+          "umbral": 10,
+          "severidad": "moderada",
+          "zona": "tronco",
+          "titulo": "Balanceo del tronco",
+          "mensaje": "Evita impulsarte con el tronco; mantén la espalda apoyada y quieta.",
+          "mensaje_ok": "Tronco estable."
+        },
+        {
+          "codigo": "CU_RITMO",
+          "tipo": "duracion_min",
+          "fase": "total",
+          "umbral": 1.2,
+          "severidad": "leve",
+          "zona": "general",
+          "titulo": "Repetición muy rápida",
+          "mensaje": "Haz el movimiento más lento y controlado.",
+          "mensaje_ok": "Ritmo controlado."
+        }
+      ]
+    },
+    {
+      "id": "press_hombros_sentado",
+      "nombre": "Press de hombros sentado",
+      "categoria": "tren_superior",
+      "posicion": "sentado",
+      "dificultad": "intermedia",
+      "vista_recomendada": "frontal",
+      "objetivo_repeticiones": 10,
+      "descripcion": "Empuje vertical con ambos brazos. Evalúa la extensión completa, la altura del empuje, la simetría y la estabilidad de hombros y tronco.",
+      "musculos": ["Deltoides", "Tríceps", "Trapecio", "Core"],
+      "camara": "Ubica el teléfono de frente, a 1,5–2 m, de modo que se vean tus manos completamente extendidas sobre la cabeza.",
+      "pasos": [
+        "Siéntate erguido con la espalda apoyada.",
+        "Manos a la altura de los hombros y codos flexionados.",
+        "Empuja hacia arriba hasta extender los brazos sobre la cabeza.",
+        "Mantén el abdomen firme y sin arquear la espalda.",
+        "Baja de forma controlada hasta la altura de los hombros."
+      ],
+      "puntos_requeridos": ["hombros", "codos", "munecas", "caderas"],
+      "fases": { "ida": "Subiendo", "vuelta": "Bajando" },
+      "senal": {
+        "metrica": "codo_promedio",
+        "nombre": "Ángulo de codo",
+        "unidad": "°",
+        "direccion": "ascendente",
+        "inicio": 115,
+        "fin": 105,
+        "minimo_rep": 140
+      },
+      "verificaciones": [
+        {
+          "codigo": "PR_EXTENSION",
+          "tipo": "pico_min",
+          "metrica": "codo_promedio",
+          "umbral": 155,
+          "severidad": "moderada",
+          "zona": "codos",
+          "titulo": "Extensión incompleta arriba",
+          "mensaje": "Extiende los brazos por completo sobre la cabeza.",
+          "mensaje_ok": "Buena extensión en la parte alta."
+        },
+        {
+          "codigo": "PR_ALTURA",
+          "tipo": "pico_min",
+          "metrica": "munecas_sobre_nariz",
+          "umbral": 0.3,
+          "severidad": "moderada",
+          "zona": "munecas",
+          "titulo": "Empuje bajo",
+          "mensaje": "Lleva las manos por encima de la cabeza al final del empuje.",
+          "mensaje_ok": "Buena altura del empuje."
+        },
+        {
+          "codigo": "PR_ASIMETRIA",
+          "tipo": "asimetria_pico",
+          "metricas": ["codo_izq", "codo_der"],
+          "umbral": 15,
+          "severidad": "leve",
+          "zona": "codos",
+          "titulo": "Brazos desiguales",
+          "mensaje": "Empuja con ambos brazos al mismo tiempo y a la misma altura.",
+          "mensaje_ok": "Empuje simétrico."
+        },
+        {
+          "codigo": "PR_HOMBROS",
+          "tipo": "rep_max",
+          "metrica": "hombros_inclinacion",
+          "umbral": 8,
+          "severidad": "leve",
+          "zona": "hombros",
+          "vistas": ["frontal"],
+          "titulo": "Hombros desnivelados",
+          "mensaje": "Mantén ambos hombros a la misma altura durante el empuje.",
+          "mensaje_ok": "Hombros nivelados."
+        },
+        {
+          "codigo": "PR_ARQUEO",
+          "tipo": "rep_max",
+          "metrica": "tronco_inclinacion",
+          "umbral": 15,
+          "severidad": "moderada",
+          "zona": "tronco",
+          "vistas": ["lateral"],
+          "titulo": "Espalda arqueada",
+          "mensaje": "Evita echar el tronco hacia atrás; mantén el abdomen firme.",
+          "mensaje_ok": "Tronco estable durante el empuje."
+        },
+        {
+          "codigo": "PR_RITMO",
+          "tipo": "duracion_min",
+          "fase": "total",
+          "umbral": 1.2,
+          "severidad": "leve",
+          "zona": "general",
+          "titulo": "Repetición muy rápida",
+          "mensaje": "Empuja y baja de forma más controlada.",
+          "mensaje_ok": "Ritmo controlado."
+        }
+      ]
+    },
+    {
+      "id": "elevacion_lateral",
+      "nombre": "Elevación lateral",
+      "categoria": "tren_superior",
+      "posicion": "de_pie",
+      "dificultad": "basica",
+      "vista_recomendada": "frontal",
+      "objetivo_repeticiones": 12,
+      "descripcion": "Abducción de hombros con ambos brazos. Evalúa la altura alcanzada, la extensión de codos, la simetría y el balanceo del cuerpo.",
+      "musculos": ["Deltoides medio", "Trapecio", "Supraespinoso"],
+      "camara": "Ubica el teléfono de frente, a 2 m, de modo que se vean tus brazos extendidos hacia los lados.",
+      "pasos": [
+        "De pie, brazos a los costados y codos levemente flexionados.",
+        "Eleva ambos brazos hacia los lados al mismo tiempo.",
+        "Sube hasta la altura de los hombros.",
+        "Mantén el tronco quieto, sin impulsarte.",
+        "Baja lentamente hasta la posición inicial."
+      ],
+      "puntos_requeridos": ["hombros", "codos", "munecas", "caderas"],
+      "fases": { "ida": "Subiendo", "vuelta": "Bajando" },
+      "senal": {
+        "metrica": "hombro_promedio",
+        "nombre": "Elevación del brazo",
+        "unidad": "°",
+        "direccion": "ascendente",
+        "inicio": 35,
+        "fin": 25,
+        "minimo_rep": 55
+      },
+      "verificaciones": [
+        {
+          "codigo": "LA_ALTURA",
+          "tipo": "pico_min",
+          "metrica": "hombro_promedio",
+          "umbral": 75,
+          "severidad": "moderada",
+          "zona": "hombros",
+          "titulo": "Elevación insuficiente",
+          "mensaje": "Sube los brazos hasta la altura de los hombros.",
+          "mensaje_ok": "Buena altura de elevación."
+        },
+        {
+          "codigo": "LA_EXCESO",
+          "tipo": "pico_max",
+          "metrica": "hombro_promedio",
+          "umbral": 110,
+          "severidad": "leve",
+          "zona": "hombros",
+          "titulo": "Elevación excesiva",
+          "mensaje": "No subas los brazos por encima de la altura de los hombros."
+        },
+        {
+          "codigo": "LA_CODOS",
+          "tipo": "pico_min",
+          "metrica": "codo_promedio",
+          "umbral": 140,
+          "severidad": "leve",
+          "zona": "codos",
+          "titulo": "Codos muy flexionados",
+          "mensaje": "Mantén los codos casi extendidos, con una flexión leve.",
+          "mensaje_ok": "Brazos bien extendidos."
+        },
+        {
+          "codigo": "LA_ASIMETRIA",
+          "tipo": "asimetria_pico",
+          "metricas": ["hombro_izq", "hombro_der"],
+          "umbral": 15,
+          "severidad": "leve",
+          "zona": "hombros",
+          "titulo": "Brazos desiguales",
+          "mensaje": "Eleva ambos brazos a la misma altura y al mismo ritmo.",
+          "mensaje_ok": "Elevación simétrica."
+        },
+        {
+          "codigo": "LA_BALANCEO",
+          "tipo": "rep_rango_max",
+          "metrica": "tronco_inclinacion",
+          "umbral": 10,
+          "severidad": "moderada",
+          "zona": "tronco",
+          "titulo": "Balanceo del cuerpo",
+          "mensaje": "Evita impulsarte con el cuerpo; mantén el tronco quieto.",
+          "mensaje_ok": "Tronco estable."
+        },
+        {
+          "codigo": "LA_RITMO",
+          "tipo": "duracion_min",
+          "fase": "total",
+          "umbral": 1.5,
+          "severidad": "leve",
+          "zona": "general",
+          "titulo": "Repetición muy rápida",
+          "mensaje": "Sube y baja de forma más lenta y controlada.",
+          "mensaje_ok": "Ritmo controlado."
+        }
+      ]
+    },
+    {
+      "id": "sentarse_pararse",
+      "nombre": "Sentarse y pararse",
+      "categoria": "funcional",
+      "posicion": "sentado",
+      "dificultad": "basica",
+      "vista_recomendada": "lateral",
+      "objetivo_repeticiones": 10,
+      "descripcion": "Movimiento funcional clave para la autonomía (base de la prueba de sentarse y pararse de 30 segundos). Evalúa la extensión completa al ponerse de pie, la alineación de rodillas y el uso del tronco.",
+      "musculos": ["Cuádriceps", "Glúteos", "Core"],
+      "camara": "Ubica el teléfono de costado, a unos 2,5 m, con la silla completa en cuadro. De frente evalúa la alineación de rodillas.",
+      "pasos": [
+        "Siéntate en una silla firme, sin ruedas, con los pies apoyados.",
+        "Cruza los brazos sobre el pecho.",
+        "Inclina levemente el tronco y ponte de pie por completo.",
+        "Mantén las rodillas alineadas con los pies.",
+        "Vuelve a sentarte de forma controlada."
+      ],
+      "puntos_requeridos": ["hombros", "caderas", "rodillas", "tobillos"],
+      "fases": { "ida": "Levantándose", "vuelta": "Sentándose" },
+      "senal": {
+        "metrica": "rodilla_promedio",
+        "nombre": "Ángulo de rodilla",
+        "unidad": "°",
+        "direccion": "ascendente",
+        "inicio": 125,
+        "fin": 115,
+        "minimo_rep": 150
+      },
+      "verificaciones": [
+        {
+          "codigo": "SS_EXTENSION",
+          "tipo": "pico_min",
+          "metrica": "rodilla_promedio",
+          "umbral": 160,
+          "severidad": "moderada",
+          "zona": "rodillas",
+          "titulo": "No te pones de pie por completo",
+          "mensaje": "Extiende completamente rodillas y caderas al ponerte de pie.",
+          "mensaje_ok": "Te pones de pie por completo."
+        },
+        {
+          "codigo": "SS_CADERA",
+          "tipo": "pico_min",
+          "metrica": "cadera_promedio",
+          "umbral": 160,
+          "severidad": "leve",
+          "zona": "cadera",
+          "vistas": ["lateral"],
+          "titulo": "Cadera sin extender",
+          "mensaje": "Al estar de pie, lleva la cadera adelante hasta quedar erguido.",
+          "mensaje_ok": "Buena extensión de cadera."
+        },
+        {
+          "codigo": "SS_VALGO",
+          "tipo": "rep_max",
+          "metrica": "valgo_max",
+          "umbral": 0.2,
+          "severidad": "alta",
+          "zona": "rodillas",
+          "vistas": ["frontal"],
+          "titulo": "Rodillas hacia adentro",
+          "mensaje": "Mantén las rodillas alineadas con los pies al levantarte.",
+          "mensaje_ok": "Rodillas alineadas."
+        },
+        {
+          "codigo": "SS_ASIMETRIA",
+          "tipo": "asimetria_pico",
+          "metricas": ["rodilla_izq", "rodilla_der"],
+          "umbral": 15,
+          "severidad": "leve",
+          "zona": "rodillas",
+          "vistas": ["frontal"],
+          "titulo": "Apoyo desigual",
+          "mensaje": "Reparte el peso por igual entre ambas piernas.",
+          "mensaje_ok": "Apoyo simétrico."
+        },
+        {
+          "codigo": "SS_TRONCO",
+          "tipo": "rep_max",
+          "metrica": "tronco_inclinacion",
+          "umbral": 60,
+          "severidad": "leve",
+          "zona": "tronco",
+          "vistas": ["lateral"],
+          "titulo": "Inclinación excesiva",
+          "mensaje": "Inclina el tronco solo lo necesario para levantarte.",
+          "mensaje_ok": "Buen control del tronco."
+        }
+      ]
+    }
+  ]
+}

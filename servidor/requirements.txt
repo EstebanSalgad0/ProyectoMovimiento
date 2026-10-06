@@ -1,6 +1,8 @@
-mediapipe
-opencv-python
+mediapipe>=0.10.14
+# opencv-python incluye ventanas (necesarias para pose_feedback_webcam.py).
+# En un servidor/Docker sin pantalla se puede usar opencv-python-headless.
+opencv-python>=4.9
 numpy<2.3
-fastapi
-uvicorn
+fastapi>=0.110
+uvicorn[standard]
 python-multipart

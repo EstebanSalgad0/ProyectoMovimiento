@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Red: análisis de video en el servidor. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Cámara: análisis en tiempo real y grabación de videos. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera.any" android:required="false"/>
+
     <application
-        android:label="medicina_app"
+        android:label="Movimiento"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

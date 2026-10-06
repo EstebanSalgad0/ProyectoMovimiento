@@ -1,192 +1,315 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import '../../core/tema/colores.dart';
-import '../../core/tema/tipografia.dart';
-import '../../core/widgets/encabezado.dart';
-import '../../core/widgets/boton_principal.dart';
-import '../../rutas.dart';
-import '../../servicios/servicio_ia.dart';
-import '../../modelos/resultado_analisis.dart';
 
-class PreparacionPantalla extends StatefulWidget {
-  const PreparacionPantalla({super.key});
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
+
+import '../../core/config/app_config.dart';
+import '../../core/tema/colores.dart';
+import '../../core/tema/tema.dart';
+import '../../core/utils/formato.dart';
+import '../../core/utils/presentacion.dart';
+import '../../core/widgets/boton_principal.dart';
+import '../../core/widgets/ilustracion_ejercicio.dart';
+import '../../core/widgets/tarjeta.dart';
+import '../../estado/proveedores.dart';
+import '../../rutas.dart';
+import '../analizando/analizando_pantalla.dart';
+import '../ejercicios/selector_ejercicio.dart';
+
+/// Preparación del análisis de video: elegir ejercicio y grabar o subir un video.
+class PreparacionPantalla extends ConsumerStatefulWidget {
+  final String? ejercicioInicial;
+
+  const PreparacionPantalla({super.key, this.ejercicioInicial});
 
   @override
-  State<PreparacionPantalla> createState() => _PreparacionPantallaState();
+  ConsumerState<PreparacionPantalla> createState() => _PreparacionPantallaState();
 }
 
-class _PreparacionPantallaState extends State<PreparacionPantalla> {
-  File? _videoSeleccionado;
-  String _ejercicioSeleccionado = 'sentadilla';
-  bool _cargando = false;
+class _PreparacionPantallaState extends ConsumerState<PreparacionPantalla> {
+  late String _ejercicio;
+  File? _video;
+  VideoPlayerController? _reproductor;
+  int? _tamano;
 
-  final List<String> _ejercicios = [
-    'sentadilla',
-    'zancada',
-    'curl_biceps_sentado',
-    'press_hombros_sentado',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    final spec = ref.read(especificacionProvider);
+    _ejercicio = spec.buscar(widget.ejercicioInicial ?? '')?.id ?? spec.ejercicios.first.id;
+  }
 
-  Future<void> _seleccionarVideo() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.video);
-    if (result != null && result.files.single.path != null) {
-      setState(() => _videoSeleccionado = File(result.files.single.path!));
+  @override
+  void dispose() {
+    _reproductor?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _elegirVideo(ImageSource fuente) async {
+    try {
+      final archivo = await ImagePicker().pickVideo(source: fuente, maxDuration: AppConfig.duracionMaximaVideo);
+      if (archivo == null) return;
+      final video = File(archivo.path);
+      final reproductor = VideoPlayerController.file(video);
+      await reproductor.initialize();
+      await reproductor.setLooping(true);
+      final tamano = await video.length();
+      final anterior = _reproductor;
+      setState(() {
+        _video = video;
+        _reproductor = reproductor;
+        _tamano = tamano;
+      });
+      await anterior?.dispose();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo abrir el video: $e')));
     }
   }
 
-  Future<void> _analizarVideo() async {
-    if (_videoSeleccionado == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecciona un video primero')),
-      );
-      return;
-    }
+  Future<void> _cambiarEjercicio() async {
+    final id = await mostrarSelectorEjercicio(context);
+    if (id != null) setState(() => _ejercicio = id);
+  }
 
-    Navigator.pushReplacementNamed(
-      context,
+  void _analizar() {
+    final video = _video;
+    if (video == null) return;
+    _reproductor?.pause();
+    context.push(
       Rutas.analizando,
-      arguments: {
-        'video': _videoSeleccionado,
-        'ejercicio': _ejercicioSeleccionado,
-      },
-    );
-  }
-
-  Widget _itemInstruccion(String numero, String titulo, String subtitulo) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 24, height: 24,
-            decoration: BoxDecoration(
-              color: AppColores.azulLight,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Text(numero, style: AppTipo.badge()
-                  .copyWith(color: AppColores.azulPrincipal)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(titulo, style: AppTipo.bodyMedium()
-                  .copyWith(color: AppColores.textoPrincipal)),
-              const SizedBox(height: 2),
-              Text(subtitulo, style: AppTipo.caption()
-                  .copyWith(color: AppColores.textoSecundario)),
-            ],
-          ),
-        ],
-      ),
+      extra: SolicitudAnalisis(video: video, ejercicio: _ejercicio),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final p = context.paleta;
+    final e = ref.watch(especificacionProvider).ejercicio(_ejercicio);
+    final reproductor = _reproductor;
+
     return Scaffold(
-      backgroundColor: AppColores.fondoApp,
-      appBar: Encabezado(titulo: 'Preparación', centrado: true),
+      appBar: AppBar(title: const Text('Analizar video')),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(Medidas.margen, 4, Medidas.margen, 24),
         children: [
-          // Card subir video
-          GestureDetector(
-            onTap: _seleccionarVideo,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 50),
-              decoration: BoxDecoration(
-                color: AppColores.fondoCard,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColores.bordeDefault, width: 1.5),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 56, height: 56,
-                    decoration: BoxDecoration(
-                      color: AppColores.azulLight,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.upload_rounded,
-                        color: AppColores.azulPrincipal, size: 28),
+          const EncabezadoSeccion(titulo: 'Ejercicio'),
+          Tarjeta(
+            padding: const EdgeInsets.all(10),
+            onTap: _cambiarEjercicio,
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(width: 64, height: 64, child: IlustracionEjercicio(ejercicioId: e.id)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(e.nombre, style: context.textos.titleMedium),
+                      const SizedBox(height: 2),
+                      Text(Presentacion.categoria(e.categoria), style: context.textos.bodySmall),
+                    ],
                   ),
-                  const SizedBox(height: 14),
-                  Text(
-                    _videoSeleccionado != null
-                        ? 'Video subido correctamente'
-                        : 'Sube tu video',
-                    style: AppTipo.cardTitle().copyWith(
-                      color: _videoSeleccionado != null
-                          ? AppColores.correctoTexto
-                          : AppColores.textoPrincipal,
+                ),
+                TextButton(onPressed: _cambiarEjercicio, child: const Text('Cambiar')),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const EncabezadoSeccion(titulo: 'Video'),
+          if (reproductor == null)
+            Row(
+              children: [
+                Expanded(
+                  child: _OpcionFuente(
+                    icono: Icons.videocam_rounded,
+                    titulo: 'Grabar',
+                    subtitulo: 'Hasta ${AppConfig.duracionMaximaVideo.inSeconds} s',
+                    onTap: () => _elegirVideo(ImageSource.camera),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _OpcionFuente(
+                    icono: Icons.video_library_rounded,
+                    titulo: 'Galería',
+                    subtitulo: 'Elegir un video',
+                    onTap: () => _elegirVideo(ImageSource.gallery),
+                  ),
+                ),
+              ],
+            )
+          else
+            Tarjeta(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(Medidas.radioL)),
+                    child: Container(
+                      color: Colors.black,
+                      height: 260,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          AspectRatio(aspectRatio: reproductor.value.aspectRatio, child: VideoPlayer(reproductor)),
+                          ValueListenableBuilder(
+                            valueListenable: reproductor,
+                            builder: (context, valor, _) => IconButton.filled(
+                              iconSize: 34,
+                              style: IconButton.styleFrom(backgroundColor: Colors.black.withValues(alpha: 0.45)),
+                              icon: Icon(valor.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                              color: AppColores.blanco,
+                              tooltip: valor.isPlaying ? 'Pausar' : 'Reproducir',
+                              onPressed: () => valor.isPlaying ? reproductor.pause() : reproductor.play(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: p.exito),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Video listo', style: context.textos.titleSmall),
+                              Text(
+                                [
+                                  Formato.segundos(reproductor.value.duration.inMilliseconds / 1000),
+                                  if (_tamano != null) Formato.tamanoArchivo(_tamano!),
+                                ].join(' · '),
+                                style: context.textos.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        PopupMenuButton<ImageSource>(
+                          tooltip: 'Cambiar video',
+                          onSelected: _elegirVideo,
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: ImageSource.camera, child: Text('Grabar otro')),
+                            PopupMenuItem(value: ImageSource.gallery, child: Text('Elegir de la galería')),
+                          ],
+                          child: const Padding(padding: EdgeInsets.all(8), child: Text('Cambiar')),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-
-          // Selector de ejercicio
-          Text('Ejercicio', style: AppTipo.labelMedium()
-              .copyWith(color: AppColores.textoSecundario)),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: AppColores.fondoCard,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColores.bordeDefault),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _ejercicioSeleccionado,
-                isExpanded: true,
-                style: AppTipo.body().copyWith(color: AppColores.textoPrincipal),
-                items: _ejercicios.map((e) => DropdownMenuItem(
-                  value: e,
-                  child: Text(e.replaceAll('_', ' ')),
-                )).toList(),
-                onChanged: (v) => setState(() => _ejercicioSeleccionado = v!),
-              ),
-            ),
-          ),
           const SizedBox(height: 24),
-
-          Text('Antes de grabar', style: AppTipo.labelMedium()
-              .copyWith(color: AppColores.textoSecundario)),
-          const SizedBox(height: 12),
-          _itemInstruccion('1', 'Graba de frente o de lado', 'Para mejor detección de postura'),
-          _itemInstruccion('2', 'Asegúrate de tener buena luz', 'Evita contraluces o sombras fuertes'),
-          _itemInstruccion('3', 'Muestra el cuerpo completo', 'Desde la cabeza hasta los pies'),
-          const SizedBox(height: 8),
-
-          _cargando
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-            children: [
-              BotonPrincipal(
-                texto: 'Analizar video',
-                onPressed: _analizarVideo,
-              ),
-
-              const SizedBox(height: 12),
-
-              BotonPrincipal(
-                texto: 'Grabarse en tiempo real',
-                secundario: true,
-                onPressed: () => Navigator.pushNamed(context, Rutas.tiempoReal),
-              ),
-            ],
+          const EncabezadoSeccion(titulo: 'Para un buen análisis'),
+          Tarjeta(
+            child: Column(
+              children: [
+                _Consejo(
+                  icono: Presentacion.iconoVista(e.vistaRecomendada),
+                  titulo: 'Graba ${Presentacion.vista(e.vistaRecomendada).toLowerCase()}',
+                  texto: e.camara,
+                ),
+                const _Consejo(
+                  icono: Icons.accessibility_new_rounded,
+                  titulo: 'Cuerpo completo en cuadro',
+                  texto: 'Que se vean cabeza, manos y pies durante todo el ejercicio.',
+                ),
+                const _Consejo(
+                  icono: Icons.wb_sunny_outlined,
+                  titulo: 'Buena iluminación',
+                  texto: 'Evita contraluces, sombras fuertes y ropa del mismo color que el fondo.',
+                ),
+                const _Consejo(
+                  icono: Icons.timer_outlined,
+                  titulo: 'Entre 3 y 10 repeticiones',
+                  texto: 'Videos de 10 a 40 segundos se analizan más rápido.',
+                  ultimo: true,
+                ),
+              ],
+            ),
           ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Medidas.margen, 8, Medidas.margen, 12),
+          child: BotonPrincipal(
+            texto: _video == null ? 'Elige un video para continuar' : 'Analizar video',
+            icono: Icons.auto_awesome_rounded,
+            onPressed: _video == null ? null : _analizar,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
+class _OpcionFuente extends StatelessWidget {
+  final IconData icono;
+  final String titulo;
+  final String subtitulo;
+  final VoidCallback onTap;
+
+  const _OpcionFuente({required this.icono, required this.titulo, required this.subtitulo, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.paleta;
+    return Tarjeta(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 12),
+      child: Column(
+        children: [
+          IconoCaja(icono: icono, color: p.primario, fondo: p.primarioSuave, tamano: 54),
+          const SizedBox(height: 12),
+          Text(titulo, style: context.textos.titleSmall),
+          const SizedBox(height: 2),
+          Text(subtitulo, style: context.textos.bodySmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _Consejo extends StatelessWidget {
+  final IconData icono;
+  final String titulo;
+  final String texto;
+  final bool ultimo;
+
+  const _Consejo({required this.icono, required this.titulo, required this.texto, this.ultimo = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.paleta;
+    return Padding(
+      padding: EdgeInsets.only(bottom: ultimo ? 0 : 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icono, color: p.primario, size: 22),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo, style: context.textos.titleSmall),
+                const SizedBox(height: 2),
+                Text(texto, style: context.textos.bodySmall),
+              ],
+            ),
+          ),
         ],
       ),
     );

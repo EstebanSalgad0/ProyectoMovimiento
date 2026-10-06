@@ -1,168 +1,384 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../core/tema/colores.dart';
-import '../../core/tema/tipografia.dart';
-import '../../core/widgets/encabezado.dart';
+import '../../core/tema/tema.dart';
+import '../../core/utils/formato.dart';
 import '../../core/widgets/boton_principal.dart';
-import '../../servicios/auth_servicios.dart';
-import '../../servicios/historial_servicio.dart';
-import '../../servicios/servicio_ia.dart';
+import '../../core/widgets/ilustracion_ejercicio.dart';
+import '../../core/widgets/tarjeta.dart';
+import '../../estado/proveedores.dart';
+import '../../modelos/sesion.dart';
 import '../../rutas.dart';
+import '../../servicios/servicio_ia.dart';
 
-class AnalizandoPantalla extends StatefulWidget {
-  const AnalizandoPantalla({super.key});
-
-  @override
-  State<AnalizandoPantalla> createState() => _AnalizandoPantallaState();
+class SolicitudAnalisis {
+  final File video;
+  final String ejercicio;
+  const SolicitudAnalisis({required this.video, required this.ejercicio});
 }
 
-class _AnalizandoPantallaState extends State<AnalizandoPantalla> {
-  bool _iniciado = false;
+enum _Etapa { subiendo, procesando, error }
+
+/// Sube el video, espera el análisis del servidor y abre el resultado.
+class AnalizandoPantalla extends ConsumerStatefulWidget {
+  final SolicitudAnalisis solicitud;
+
+  const AnalizandoPantalla({super.key, required this.solicitud});
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_iniciado) {
-      _iniciado = true;
-      _analizarVideo();
+  ConsumerState<AnalizandoPantalla> createState() => _AnalizandoPantallaState();
+}
+
+class _AnalizandoPantallaState extends ConsumerState<AnalizandoPantalla> {
+  _Etapa _etapa = _Etapa.subiendo;
+  double _progreso = 0;
+  ErrorAnalisis? _error;
+  CancelToken? _cancelar;
+  final _reloj = Stopwatch();
+  Timer? _tic;
+
+  @override
+  void initState() {
+    super.initState();
+    _tic = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+    _analizar();
+  }
+
+  @override
+  void dispose() {
+    _tic?.cancel();
+    _cancelar?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _analizar() async {
+    final cancelar = CancelToken();
+    _cancelar = cancelar;
+    setState(() {
+      _etapa = _Etapa.subiendo;
+      _progreso = 0;
+      _error = null;
+    });
+    _reloj
+      ..reset()
+      ..start();
+    try {
+      final resultado = await ref
+          .read(servicioIAProvider)
+          .analizarVideo(
+            video: widget.solicitud.video,
+            ejercicio: widget.solicitud.ejercicio,
+            cancelar: cancelar,
+            onProgreso: (v) {
+              if (!mounted) return;
+              setState(() {
+                _progreso = v;
+                if (v >= 0.999) _etapa = _Etapa.procesando;
+              });
+            },
+          );
+      final sesion = await ref
+          .read(historialProvider.notifier)
+          .registrar(resultado, OrigenSesion.video, videoNombre: widget.solicitud.video.uri.pathSegments.last);
+      if (mounted) context.pushReplacement(Rutas.sesion(sesion.id, nueva: true), extra: sesion);
+    } on ErrorAnalisis catch (e) {
+      if (e.tipo == TipoErrorAnalisis.cancelado || !mounted) return;
+      setState(() {
+        _etapa = _Etapa.error;
+        _error = e;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _etapa = _Etapa.error;
+        _error = ErrorAnalisis(TipoErrorAnalisis.desconocido, '$e');
+      });
+    } finally {
+      _reloj.stop();
     }
   }
 
-  Future<void> _analizarVideo() async {
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final video    = args?['video']    as File?;
-    final ejercicio= args?['ejercicio'] as String? ?? 'sentadilla';
-
-    if (video == null) {
-      Navigator.pushReplacementNamed(context, Rutas.preparacion);
-      return;
-    }
-
-    try {
-      final resultado = await ServicioIA.analizarVideo(
-        video: video,
-        ejercicio: ejercicio,
-      );
-
-      final usuario = AuthServicio.usuarioActual.isNotEmpty
-          ? AuthServicio.usuarioActual
-          : 'anonimo';
-      final videoNombre = video.path.split(Platform.pathSeparator).last;
-
-      try {
-        await HistorialServicio.guardarAnalisis(
-          usuario: usuario,
-          resultado: resultado,
-          videoNombre: videoNombre,
-        );
-      } catch (_) {
-        // Si falla el guardado local, igual mostramos el resultado.
-      }
-
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, Rutas.resultado, arguments: resultado);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-        Navigator.pushReplacementNamed(context, Rutas.preparacion);
-      }
-    }
+  void _cancelarYVolver() {
+    _cancelar?.cancel();
+    context.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final nombreVideo = (args?['video'] as File?)?.path.split('\\').last ?? 'video.mp4';
-    final ejercicio   = args?['ejercicio'] as String? ?? 'sentadilla';
+    final p = context.paleta;
+    final e = ref.watch(especificacionProvider).buscar(widget.solicitud.ejercicio);
+    final error = _error;
 
-    return Scaffold(
-      backgroundColor: AppColores.fondoApp,
-      appBar: Encabezado(titulo: 'Analizando', centrado: true),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            // Card video
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColores.fondoCard,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColores.bordeDefault),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColores.azulLight,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.play_arrow_rounded,
-                        color: AppColores.azulPrincipal, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(nombreVideo, style: AppTipo.bodyMedium()
-                            .copyWith(color: AppColores.textoPrincipal)),
-                        Text(ejercicio.replaceAll('_', ' '), style: AppTipo.caption()
-                            .copyWith(color: AppColores.textoSecundario)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColores.correctoBg,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('Listo', style: AppTipo.badge()
-                        .copyWith(color: AppColores.correctoTexto)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 48),
-
-            // Spinner
-            Container(
-              width: 80, height: 80,
-              decoration: const BoxDecoration(
-                color: AppColores.azulLight,
-                shape: BoxShape.circle,
-              ),
-              child: const Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(
-                  color: AppColores.azulPrincipal,
-                  strokeWidth: 3,
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            Text('Procesando tu video', style: AppTipo.cardTitle()
-                .copyWith(color: AppColores.textoPrincipal)),
-            const SizedBox(height: 4),
-            Text('La IA está evaluando tu video', style: AppTipo.caption()
-                .copyWith(color: AppColores.textoSecundario)),
-
-            const Spacer(),
-
-            BotonPrincipal(
-              texto: 'Cancelar',
-              secundario: true,
-              onPressed: () => Navigator.pushReplacementNamed(context, Rutas.preparacion),
-            ),
+    return PopScope(
+      canPop: _etapa == _Etapa.error,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _cancelarYVolver();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: Text(_etapa == _Etapa.error ? 'Análisis' : 'Analizando'),
+          actions: [
+            IconButton(icon: const Icon(Icons.close_rounded), tooltip: 'Cancelar', onPressed: _cancelarYVolver),
           ],
         ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(Medidas.margen, 8, Medidas.margen, 16),
+            child: error != null
+                ? _VistaError(error: error, onReintentar: _analizar, onServidor: () => context.go(Rutas.cuenta))
+                : Column(
+                    children: [
+                      const Spacer(),
+                      _Pulso(ejercicioId: widget.solicitud.ejercicio),
+                      const SizedBox(height: 28),
+                      Text(
+                        _etapa == _Etapa.subiendo ? 'Subiendo tu video' : 'Analizando tu técnica',
+                        style: context.textos.headlineSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        e?.nombre ?? widget.solicitud.ejercicio,
+                        style: context.textos.bodyMedium?.copyWith(color: p.textoSecundario),
+                      ),
+                      const Spacer(),
+                      Tarjeta(
+                        child: Column(
+                          children: [
+                            _Paso(
+                              titulo: 'Subir video',
+                              detalle: _etapa == _Etapa.subiendo ? '${(_progreso * 100).round()} %' : 'Listo',
+                              estado: _etapa == _Etapa.subiendo ? _EstadoPaso.activo : _EstadoPaso.hecho,
+                              progreso: _etapa == _Etapa.subiendo ? _progreso : null,
+                            ),
+                            _Paso(
+                              titulo: 'Detectar 33 puntos del cuerpo y evaluar cada repetición',
+                              detalle: _etapa == _Etapa.procesando ? Formato.cronometro(_reloj.elapsed) : null,
+                              estado: _etapa == _Etapa.procesando ? _EstadoPaso.activo : _EstadoPaso.pendiente,
+                            ),
+                            const _Paso(titulo: 'Preparar tu reporte', estado: _EstadoPaso.pendiente, ultimo: true),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      BotonPrincipal(
+                        texto: 'Cancelar',
+                        variante: VarianteBoton.secundario,
+                        onPressed: _cancelarYVolver,
+                      ),
+                    ],
+                  ),
+          ),
+        ),
       ),
+    );
+  }
+}
+
+class _Pulso extends StatefulWidget {
+  final String ejercicioId;
+  const _Pulso({required this.ejercicioId});
+
+  @override
+  State<_Pulso> createState() => _PulsoState();
+}
+
+class _PulsoState extends State<_Pulso> with SingleTickerProviderStateMixin {
+  late final _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.paleta;
+    return SizedBox(
+      width: 220,
+      height: 220,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, child) => CustomPaint(
+          painter: _PintorPulso(t: _ctrl.value, color: p.primario),
+          child: child,
+        ),
+        child: Center(
+          child: Container(
+            width: 132,
+            height: 132,
+            decoration: BoxDecoration(gradient: p.gradiente, shape: BoxShape.circle),
+            padding: const EdgeInsets.all(20),
+            child: IlustracionEjercicio(
+              ejercicioId: widget.ejercicioId,
+              animada: true,
+              conFondo: false,
+              color: AppColores.blanco,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PintorPulso extends CustomPainter {
+  final double t;
+  final Color color;
+  _PintorPulso({required this.t, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centro = size.center(Offset.zero);
+    for (var i = 0; i < 3; i++) {
+      final fase = (t + i / 3) % 1.0;
+      final radio = 66 + fase * (size.shortestSide / 2 - 66);
+      canvas.drawCircle(
+        centro,
+        radio,
+        Paint()
+          ..color = color.withValues(alpha: 0.22 * (1 - fase))
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+    }
+    // Arco giratorio
+    canvas.drawArc(
+      Rect.fromCircle(center: centro, radius: 76),
+      t * 2 * math.pi,
+      math.pi / 2,
+      false,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _PintorPulso old) => old.t != t || old.color != color;
+}
+
+enum _EstadoPaso { pendiente, activo, hecho }
+
+class _Paso extends StatelessWidget {
+  final String titulo;
+  final String? detalle;
+  final _EstadoPaso estado;
+  final double? progreso;
+  final bool ultimo;
+
+  const _Paso({required this.titulo, required this.estado, this.detalle, this.progreso, this.ultimo = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.paleta;
+    final Widget icono = switch (estado) {
+      _EstadoPaso.hecho => Icon(Icons.check_circle_rounded, color: p.exito, size: 24),
+      _EstadoPaso.activo => SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(strokeWidth: 2.6, value: progreso),
+      ),
+      _EstadoPaso.pendiente => Icon(Icons.radio_button_unchecked_rounded, color: p.borde, size: 24),
+    };
+    return Padding(
+      padding: EdgeInsets.only(bottom: ultimo ? 0 : 14),
+      child: Row(
+        children: [
+          SizedBox(width: 26, child: Center(child: icono)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              titulo,
+              style: context.textos.bodyMedium?.copyWith(
+                color: estado == _EstadoPaso.pendiente ? p.textoTerciario : p.texto,
+                fontWeight: estado == _EstadoPaso.activo ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+          if (detalle != null) Text(detalle!, style: context.textos.labelMedium?.copyWith(color: p.textoSecundario)),
+        ],
+      ),
+    );
+  }
+}
+
+class _VistaError extends StatelessWidget {
+  final ErrorAnalisis error;
+  final VoidCallback onReintentar;
+  final VoidCallback onServidor;
+
+  const _VistaError({required this.error, required this.onReintentar, required this.onServidor});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.paleta;
+    final sinConexion = error.tipo == TipoErrorAnalisis.sinConexion;
+    return Column(
+      children: [
+        const Spacer(),
+        IconoCaja(
+          icono: sinConexion ? Icons.cloud_off_rounded : Icons.error_outline_rounded,
+          color: p.peligro,
+          fondo: p.peligroSuave,
+          tamano: 84,
+        ),
+        const SizedBox(height: 22),
+        Text(
+          sinConexion ? 'Sin conexión con el servidor' : 'No pudimos analizar el video',
+          style: context.textos.headlineSmall,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          error.mensaje,
+          style: context.textos.bodyMedium?.copyWith(color: p.textoSecundario),
+          textAlign: TextAlign.center,
+        ),
+        if (sinConexion) ...[
+          const SizedBox(height: 16),
+          Tarjeta(
+            color: p.infoSuave,
+            colorBorde: p.infoSuave,
+            child: Row(
+              children: [
+                Icon(Icons.bolt_rounded, color: p.info),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'El modo tiempo real funciona sin servidor: el análisis se hace en tu teléfono.',
+                    style: context.textos.bodySmall?.copyWith(color: p.texto),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const Spacer(),
+        BotonPrincipal(texto: 'Reintentar', icono: Icons.refresh_rounded, onPressed: onReintentar),
+        const SizedBox(height: 10),
+        if (sinConexion)
+          BotonPrincipal(
+            texto: 'Configurar servidor',
+            icono: Icons.dns_outlined,
+            variante: VarianteBoton.secundario,
+            onPressed: onServidor,
+          )
+        else
+          BotonPrincipal(texto: 'Volver', variante: VarianteBoton.secundario, onPressed: () => context.pop()),
+      ],
     );
   }
 }

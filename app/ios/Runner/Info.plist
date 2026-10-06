@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Medicina App</string>
+	<string>Movimiento</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Movimiento usa la cámara para analizar tu técnica en tiempo real. Las imágenes se procesan en el teléfono.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>El micrófono solo se usa si grabas un video con audio para analizarlo.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Movimiento necesita acceso a tus videos para que elijas uno y lo analices.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

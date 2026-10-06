@@ -661,6 +661,7 @@ class _ResumenEvaluaciones extends StatelessWidget {
                             Text('${e.repeticiones ?? 0}', style: AppTipo.numero(13, p.texto)),
                             const SizedBox(height: 4),
                             Container(
+                              width: 30,
                               height: 8 + 44 * ((e.repeticiones ?? 0) / maximo),
                               decoration: BoxDecoration(
                                 color: e.clasificacion == ClasificacionSts30.bajoPromedio ? p.advertencia : p.acento,
@@ -690,10 +691,12 @@ class _ResumenEvaluaciones extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      flex: 3,
+                      flex: 5,
                       child: Text(
-                        '${e.articulacion!.etiqueta} ${e.lado?.etiqueta.toLowerCase() ?? ''}',
+                        e.articulacion!.conLado(e.lado),
                         style: context.textos.bodyMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Expanded(

@@ -178,7 +178,23 @@ class _FilaObjetivoState extends ConsumerState<_FilaObjetivo> {
               ],
             ),
             Padding(
-              padding: const EdgeInsets.only(left: 18),
+              padding: const EdgeInsets.only(left: 18, right: 66),
+              child: Row(
+                children: [
+                  Text(
+                    v.fallaPorMenor ? '← más permisivo' : '← más exigente',
+                    style: context.textos.labelSmall?.copyWith(color: p.textoTerciario),
+                  ),
+                  const Spacer(),
+                  Text(
+                    v.fallaPorMenor ? 'más exigente →' : 'más permisivo →',
+                    style: context.textos.labelSmall?.copyWith(color: p.textoTerciario),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 18, top: 4),
               child: Text(
                 cambiado ? 'Recomendado: ${formatoUmbral(v.umbral, r)}' : 'Valor recomendado',
                 style: context.textos.bodySmall,

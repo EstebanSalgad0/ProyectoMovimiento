@@ -114,7 +114,7 @@ class DetalleRutinaPantalla extends ConsumerWidget {
                   children: [
                     _Dato(valor: '${r.items.length}', etiqueta: 'Ejercicios'),
                     _Dato(valor: '${r.totalSeries}', etiqueta: 'Series'),
-                    _Dato(valor: '${r.totalRepeticiones}', etiqueta: 'Repeticiones'),
+                    _Dato(valor: '${r.totalRepeticiones}', etiqueta: 'Reps.'),
                     _Dato(valor: '~${r.minutosEstimados}', etiqueta: 'Minutos'),
                   ],
                 ),

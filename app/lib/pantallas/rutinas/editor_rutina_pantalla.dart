@@ -274,24 +274,27 @@ class _Contador extends StatelessWidget {
         icon: Icon(icono),
       ),
     );
-    return Column(
-      children: [
-        Text(etiqueta, style: context.textos.labelSmall?.copyWith(color: p.textoSecundario)),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            boton(Icons.remove_rounded, 'Menos $etiqueta', valor - paso >= min ? valor - paso : null),
-            Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text('$valor$sufijo', textAlign: TextAlign.center, style: AppTipo.numero(17, p.texto)),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        children: [
+          Text(etiqueta, style: context.textos.labelSmall?.copyWith(color: p.textoSecundario)),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              boton(Icons.remove_rounded, 'Menos $etiqueta', valor - paso >= min ? valor - paso : null),
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('$valor$sufijo', textAlign: TextAlign.center, style: AppTipo.numero(17, p.texto)),
+                ),
               ),
-            ),
-            boton(Icons.add_rounded, 'Más $etiqueta', valor + paso <= max ? valor + paso : null),
-          ],
-        ),
-      ],
+              boton(Icons.add_rounded, 'Más $etiqueta', valor + paso <= max ? valor + paso : null),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

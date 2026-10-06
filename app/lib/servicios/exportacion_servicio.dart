@@ -343,7 +343,7 @@ class ExportacionServicio {
                 for (final e in evals.where((e) => e.tipo == TipoEvaluacion.rangoArticular))
                   [
                     _fecha(e.fecha),
-                    '${e.articulacion?.movimiento ?? ''} ${e.lado?.etiqueta.toLowerCase() ?? ''}',
+                    '${e.articulacion?.movimiento ?? ''} (lado ${e.lado?.etiqueta.toLowerCase() ?? '—'})',
                     '${(e.maximo ?? 0).round()}°',
                     '${((e.fraccionReferencia ?? 0) * 100).round()} %',
                   ],

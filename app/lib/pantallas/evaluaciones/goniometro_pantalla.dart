@@ -78,8 +78,8 @@ class _GoniometroPantallaState extends ConsumerState<GoniometroPantalla>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Guardado: ${e.articulacion!.etiqueta.toLowerCase()} ${e.lado!.etiqueta.toLowerCase()} '
-          '${maximo.round()}° ($pct % de la referencia)',
+          'Guardado: ${e.articulacion!.conLado(e.lado).toLowerCase()} ${maximo.round()}° '
+          '($pct % de la referencia)',
         ),
       ),
     );
@@ -167,7 +167,7 @@ class _Panel extends StatelessWidget {
         const SizedBox(height: 10),
         if (!ctrl.visible)
           BannerAviso(
-            titulo: 'No se ve el ${ctrl.articulacion.etiqueta.toLowerCase()} ${ctrl.lado.etiqueta.toLowerCase()}',
+            titulo: 'No se ve ${ctrl.articulacion.conArticulo(ctrl.lado)}',
             detalle: 'Ubica el teléfono de costado y aléjate hasta que se vea la articulación completa.',
             severidad: Severidad.info,
           ),

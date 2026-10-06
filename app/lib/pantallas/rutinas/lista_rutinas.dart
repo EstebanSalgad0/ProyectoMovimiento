@@ -131,7 +131,7 @@ class TarjetaRutina extends ConsumerWidget {
   }
 }
 
-/// Hasta tres ilustraciones superpuestas de los ejercicios de una rutina.
+/// Ilustración del primer ejercicio y cuántos más tiene la rutina.
 class _MiniaturasEjercicios extends StatelessWidget {
   final List<String> ids;
   const _MiniaturasEjercicios({required this.ids});
@@ -139,27 +139,31 @@ class _MiniaturasEjercicios extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.paleta;
-    final visibles = ids.take(3).toList();
-    const tamano = 46.0;
-    const desplazamiento = 14.0;
+    const tamano = 64.0;
     return SizedBox(
-      width: tamano + desplazamiento * 2,
-      height: tamano + desplazamiento,
+      width: tamano + 6,
+      height: tamano + 6,
       child: Stack(
         children: [
-          for (var i = visibles.length - 1; i >= 0; i--)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: SizedBox.square(
+              dimension: tamano,
+              child: ids.isEmpty ? ColoredBox(color: p.superficieAlta) : IlustracionEjercicio(ejercicioId: ids.first),
+            ),
+          ),
+          if (ids.length > 1)
             Positioned(
-              left: i * desplazamiento,
-              top: i * desplazamiento / 2,
+              right: 0,
+              bottom: 0,
               child: Container(
-                width: tamano,
-                height: tamano,
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
+                  color: p.primario,
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: p.superficie, width: 2),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: IlustracionEjercicio(ejercicioId: visibles[i]),
+                child: Text('+${ids.length - 1}', style: context.textos.labelSmall?.copyWith(color: p.sobrePrimario)),
               ),
             ),
         ],

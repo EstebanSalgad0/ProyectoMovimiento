@@ -172,9 +172,7 @@ class ItemEvaluacion extends ConsumerWidget {
     final p = context.paleta;
     final e = evaluacion;
     final esSts = e.tipo == TipoEvaluacion.sentarsePararse30s;
-    final titulo = esSts
-        ? 'Sentarse y pararse 30 s'
-        : '${e.articulacion?.etiqueta ?? 'Articulación'} ${e.lado?.etiqueta.toLowerCase() ?? ''}'.trim();
+    final titulo = esSts ? 'Sentarse y pararse 30 s' : e.articulacion?.conLado(e.lado) ?? 'Articulación';
     final valor = esSts ? '${e.repeticiones ?? 0}' : '${(e.maximo ?? 0).round()}°';
     final detalle = esSts
         ? (e.clasificacion ?? ClasificacionSts30.sinReferencia).etiqueta
@@ -229,6 +227,7 @@ class ItemEvaluacion extends ConsumerWidget {
                 ],
               ),
             ),
+            const SizedBox(width: 10),
             Text(valor, style: AppTipo.numero(20, p.texto)),
           ],
         ),

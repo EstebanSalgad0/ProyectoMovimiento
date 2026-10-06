@@ -99,7 +99,7 @@ class InicioPantalla extends ConsumerWidget {
                     child: _Acceso(
                       icono: Icons.videocam_rounded,
                       titulo: 'Entrenar en vivo',
-                      detalle: 'Correcciones al instante',
+                      detalle: 'Con correcciones',
                       color: p.primario,
                       fondo: p.primarioSuave,
                       onTap: () => _entrenar(context),
@@ -110,7 +110,7 @@ class InicioPantalla extends ConsumerWidget {
                     child: _Acceso(
                       icono: Icons.playlist_play_rounded,
                       titulo: 'Rutinas',
-                      detalle: 'Series y descansos guiados',
+                      detalle: 'Series guiadas',
                       color: p.acento,
                       fondo: p.acentoSuave,
                       onTap: () => context.go(Rutas.entrenarEn('rutinas')),
@@ -125,7 +125,7 @@ class InicioPantalla extends ConsumerWidget {
                     child: _Acceso(
                       icono: Icons.video_library_rounded,
                       titulo: 'Analizar video',
-                      detalle: 'Desde la galería o grabando',
+                      detalle: 'Galería o cámara',
                       color: p.info,
                       fondo: p.infoSuave,
                       onTap: () => context.push(Rutas.preparacion),
@@ -136,7 +136,7 @@ class InicioPantalla extends ConsumerWidget {
                     child: _Acceso(
                       icono: Icons.monitor_heart_outlined,
                       titulo: 'Evaluarme',
-                      detalle: 'Prueba 30 s y goniómetro',
+                      detalle: 'Pruebas funcionales',
                       color: p.advertencia,
                       fondo: p.advertenciaSuave,
                       onTap: () => context.go(Rutas.entrenarEn('evaluaciones')),
@@ -172,7 +172,7 @@ class InicioPantalla extends ConsumerWidget {
                     child: TileEstadistica(
                       icono: Icons.calendar_today_rounded,
                       valor: '${resumen.sesionesSemana}',
-                      etiqueta: 'Últimos 7 días',
+                      etiqueta: 'En 7 días',
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -261,9 +261,17 @@ class _AvisoPerfil extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 36,
-            height: 36,
-            child: CircularProgressIndicator(value: avance, strokeWidth: 4, backgroundColor: p.superficie),
+            width: 40,
+            height: 40,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox.expand(
+                  child: CircularProgressIndicator(value: avance, strokeWidth: 4, backgroundColor: p.superficie),
+                ),
+                Icon(Icons.person_rounded, size: 20, color: p.primario),
+              ],
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(

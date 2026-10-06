@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/tema/colores.dart';
+import '../../core/tema/tema.dart';
 import '../../core/tema/tipografia.dart';
 import '../../core/utils/formato.dart';
 import '../../core/utils/presentacion.dart';
@@ -153,12 +154,11 @@ class _RevisionPantallaState extends ConsumerState<RevisionPantalla> with Single
   @override
   Widget build(BuildContext context) {
     final oscuro = PaletaApp.oscuro;
+    final temaOscuro = AppTema.oscuro;
     return Theme(
-      data: Theme.of(context).copyWith(
+      data: temaOscuro.copyWith(
         scaffoldBackgroundColor: const Color(0xFF070B14),
-        appBarTheme: Theme.of(
-          context,
-        ).appBarTheme.copyWith(backgroundColor: const Color(0xFF070B14), foregroundColor: AppColores.blanco),
+        appBarTheme: temaOscuro.appBarTheme.copyWith(backgroundColor: const Color(0xFF070B14)),
       ),
       child: Scaffold(
         appBar: AppBar(title: const Text('Revisar movimiento')),

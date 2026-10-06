@@ -94,6 +94,21 @@ enum Articulacion {
 
   static Articulacion desde(String? v) =>
       Articulacion.values.firstWhere((a) => a.name == v, orElse: () => Articulacion.hombro);
+
+  bool get femenina => this == cadera || this == rodilla;
+
+  /// "Rodilla derecha", "Hombro izquierdo"…
+  String conLado(Lado? lado) {
+    if (lado == null) return etiqueta;
+    final l = switch (lado) {
+      Lado.izquierdo => femenina ? 'izquierda' : 'izquierdo',
+      Lado.derecho => femenina ? 'derecha' : 'derecho',
+    };
+    return '$etiqueta $l';
+  }
+
+  /// "la rodilla derecha", "el hombro izquierdo".
+  String conArticulo(Lado? lado) => '${femenina ? 'la' : 'el'} ${conLado(lado).toLowerCase()}';
 }
 
 class EvaluacionFuncional {

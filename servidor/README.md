@@ -28,8 +28,8 @@ uvicorn servidor:app --reload --host 0.0.0.0 --port 8000
 | GET | `/` | Estado (compatible con la app v1) |
 | GET | `/salud` | Estado, versión, especificación y ejercicios |
 | GET | `/v1/ejercicios` | Especificación completa (catálogo + umbrales) |
-| POST | `/v1/analisis/video` | `multipart/form-data`: `video`, `ejercicio` |
-| POST | `/v1/analisis/puntos` | JSON con puntos ya detectados (`{ejercicio, fotogramas:[{t_ms, puntos, mundo?}]}`) |
+| POST | `/v1/analisis/video` | `multipart/form-data`: `video`, `ejercicio`, `ajustes` (opcional, JSON) y `esqueleto` (por defecto `true`) |
+| POST | `/v1/analisis/puntos` | JSON con puntos ya detectados (`{ejercicio, fotogramas:[{t_ms, puntos, mundo?}], ajustes?}`) |
 | POST | `/analizar` | Alias de `/v1/analisis/video` (compatibilidad v1) |
 
 Documentación interactiva en <http://localhost:8000/docs>.
@@ -39,7 +39,19 @@ Documentación interactiva en <http://localhost:8000/docs>.
 Mantiene los campos de la v1 (`ejercicio`, `puntaje`, `feedback`, `metricas`) y agrega:
 `repeticiones` (pico, rango, tiempos, fallos y puntaje por repetición), `hallazgos` (correcciones con
 severidad, zona y repeticiones afectadas), `aciertos`, `serie` (señal principal para graficar) y
-`calidad` (cuadros válidos, vista detectada, confianza).
+`calidad` (cuadros válidos, vista detectada, confianza) y, en los videos, `esqueleto` (puntos
+normalizados a ~10 cuadros/s para dibujarlos sobre el video en la app).
+
+### Objetivos personalizados (`ajustes`)
+
+Permiten cambiar el umbral de una verificación o desactivarla para un usuario (mismo formato que usa la
+app):
+
+```json
+{"sentadilla": {"SQ_PROFUNDIDAD": {"umbral": 120}, "SQ_TRONCO": {"activa": false}}}
+```
+
+Ejercicios o códigos desconocidos se ignoran; un JSON mal formado responde `422 AJUSTES_INVALIDOS`.
 
 ### Variables de entorno
 

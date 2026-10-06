@@ -28,6 +28,14 @@ checklist marcada al cerrarlo. Los tests (`flutter test`, `pytest`) deben pasar 
 - [x] Tiempo real en el teléfono (cámara + ML Kit + motor local), con voz y guía de encuadre.
 - [x] Tests: 32 del servidor, 42 de la app; capturas automáticas de pantallas.
 
+### Iteración 2 — funciones para probar en el teléfono ✅
+
+Detalle en [`PLAN_FUNCIONES.md`](PLAN_FUNCIONES.md): rutinas guiadas y propias, prueba de 30 s (CDC
+STEADI) y goniómetro, perfil completo con configuración inicial, dolor y esfuerzo por sesión, revisión del
+movimiento (esqueleto grabado y video con esqueleto), objetivos personalizados (app y servidor), meta
+semanal, calendario, logros, recomendaciones, reporte PDF, exportación JSON, eliminación de cuenta e ícono
+propio. Tests: 37 del servidor y 89 de la app; 30 capturas.
+
 ---
 
 ## Fase 1 — Prueba en dispositivos y calibración (siguiente)
@@ -44,7 +52,10 @@ para un profesional.
 - [ ] Sesión de calibración con 1–2 kinesiólogos usando `servidor/pose_feedback_webcam.py`:
       ajustar umbrales en `compartido/ejercicios.json` (y su copia en `app/assets/especificacion/`).
 - [ ] Grabar 5–10 videos por ejercicio (correctos y con errores típicos) para pruebas de regresión.
-- [ ] Definir identidad: nombre, `applicationId`/bundle id, ícono y pantalla de inicio.
+- [ ] Definir identidad: nombre, `applicationId`/bundle id y pantalla de inicio (el ícono ya existe).
+- [ ] Recordatorios con notificaciones locales (requiere configurar desugaring en Android).
+- [ ] Probar en el teléfono las funciones de la iteración 2 (rutina guiada completa, prueba de 30 s,
+      goniómetro con cámara trasera y frontal, revisión de video con esqueleto, reporte PDF).
 - [x] Agregar CI (GitHub Actions): `flutter analyze`, `flutter test`, `pytest` en cada PR (`.github/workflows/ci.yml`).
 
 ### Criterios de aceptación
@@ -83,9 +94,11 @@ para un profesional.
 ### Tareas
 - [ ] Roles y permisos (paciente / profesional) en API y app.
 - [ ] Profesional: lista de pacientes, asignación de rutinas (ejercicio, series, repeticiones, frecuencia).
-- [ ] Objetivos personalizados por paciente (rangos objetivo que sobrescriben los umbrales generales).
+- [x] Objetivos personalizados (umbrales propios por ejercicio, en la app y en el servidor). Falta que el
+      profesional los asigne de forma remota.
 - [ ] Paciente: "plan de hoy", recordatorios (notificaciones locales) y adherencia.
-- [ ] Reporte PDF por paciente/período.
+- [x] Reporte PDF por período (generado en el teléfono y compartido por el paciente).
+- [ ] Reporte PDF por paciente desde el panel del profesional.
 - [ ] (Opcional) Portal web del profesional con Flutter web reutilizando componentes.
 
 ### Criterios de aceptación
@@ -150,6 +163,6 @@ para un profesional.
 
 1. Probar esta rama en un teléfono real (ver "Cómo probar" en el README) y anotar cualquier problema de cámara.
 2. Sesión de calibración con un kinesiólogo usando la herramienta de webcam y ajustar `ejercicios.json`.
-3. Definir nombre, identificador e ícono definitivos de la app.
+3. Definir nombre e identificador definitivos de la app (el ícono propio ya está incluido).
 4. Abrir un PR de esta rama hacia `main` para que corra la CI y revisar los cambios juntos.
 5. Decidir el stack del backend (FastAPI + PostgreSQL propio, o un servicio gestionado) para iniciar la Fase 2.

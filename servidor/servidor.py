@@ -16,11 +16,12 @@ metricas) y agrega repeticiones, hallazgos, aciertos, serie y calidad.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import threading
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -86,10 +87,27 @@ def ejercicios():
     return ESPECIFICACION.crudo
 
 
-def _analizar_video(video: UploadFile, ejercicio: str):
+def _leer_ajustes(texto: Optional[str]):
+    """Objetivos personales enviados por la app (JSON). Devuelve (ajustes, error)."""
+    if not texto:
+        return None, None
+    try:
+        datos = json.loads(texto)
+    except ValueError:
+        return None, _error(422, "AJUSTES_INVALIDOS", "El campo 'ajustes' no es un JSON válido")
+    if not isinstance(datos, dict):
+        return None, _error(422, "AJUSTES_INVALIDOS", "El campo 'ajustes' debe ser un objeto")
+    return datos, None
+
+
+def _analizar_video(video: UploadFile, ejercicio: str, ajustes: Optional[str] = None, esqueleto: bool = False):
     error = _validar_ejercicio(ejercicio)
     if error:
         return error
+    ajustes_dict, error = _leer_ajustes(ajustes)
+    if error:
+        return error
+    especificacion = ESPECIFICACION.con_ajustes(ajustes_dict)
 
     sufijo = Path(video.filename or "").suffix.lower()
     if sufijo not in EXTENSIONES_VIDEO:
@@ -118,9 +136,9 @@ def _analizar_video(video: UploadFile, ejercicio: str):
             # Importación diferida: permite usar la API de puntos sin MediaPipe/OpenCV.
             from motor.video import VideoInvalido, fotogramas_desde_video
 
-            analizador = Analizador(ESPECIFICACION, ejercicio)
+            analizador = Analizador(especificacion, ejercicio, registrar_esqueleto=esqueleto)
             try:
-                for f in fotogramas_desde_video(ruta, MODELO_POSE, ESPECIFICACION.globales.fps_analisis):
+                for f in fotogramas_desde_video(ruta, MODELO_POSE, especificacion.globales.fps_analisis):
                     analizador.procesar(f)
             except VideoInvalido as exc:
                 return _error(422, "VIDEO_INVALIDO", f"No se pudo leer el video: {exc}")
@@ -137,8 +155,13 @@ def _analizar_video(video: UploadFile, ejercicio: str):
 # Endpoints síncronos (def): FastAPI los ejecuta en un pool de hilos y así el
 # procesamiento pesado no bloquea el event loop.
 @app.post("/v1/analisis/video")
-def analizar_video_v1(video: Annotated[UploadFile, File()], ejercicio: Annotated[str, Form()] = "sentadilla"):
-    return _analizar_video(video, ejercicio)
+def analizar_video_v1(
+    video: Annotated[UploadFile, File()],
+    ejercicio: Annotated[str, Form()] = "sentadilla",
+    ajustes: Annotated[Optional[str], Form(description="Objetivos personales (JSON)")] = None,
+    esqueleto: Annotated[bool, Form(description="Incluir el esqueleto muestreado")] = True,
+):
+    return _analizar_video(video, ejercicio, ajustes, esqueleto)
 
 
 @app.post("/analizar")
@@ -157,6 +180,9 @@ class FotogramaEntrada(BaseModel):
 class SolicitudPuntos(BaseModel):
     ejercicio: str
     fotogramas: List[FotogramaEntrada]
+    ajustes: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = Field(
+        default=None, description="Objetivos personales: {ejercicio: {codigo: {umbral, activa}}}"
+    )
 
 
 @app.post("/v1/analisis/puntos")
@@ -166,7 +192,7 @@ def analizar_puntos(solicitud: SolicitudPuntos):
         return error
     if len(solicitud.fotogramas) > MAX_FOTOGRAMAS:
         return _error(413, "DEMASIADOS_FOTOGRAMAS", f"Máximo {MAX_FOTOGRAMAS} fotogramas por solicitud")
-    analizador = Analizador(ESPECIFICACION, solicitud.ejercicio)
+    analizador = Analizador(ESPECIFICACION.con_ajustes(solicitud.ajustes), solicitud.ejercicio)
     t_anterior = -1
     for f in solicitud.fotogramas:
         if f.t_ms <= t_anterior:

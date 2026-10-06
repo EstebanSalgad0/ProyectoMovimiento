@@ -87,3 +87,24 @@ def test_video_sin_persona_recorre_mediapipe(tmp_path):
     assert datos["puntaje"] == 0
     assert datos["calidad"]["fotogramas"] > 0
     assert {h["codigo"] for h in datos["hallazgos"]} == {"SIN_REPETICIONES", "CALIDAD_BAJA"}
+
+
+def test_puntos_con_ajustes_personales():
+    fx = json.loads((DIR_FIXTURES / "sentadilla_lateral_poco_profunda.json").read_text(encoding="utf-8"))
+    ajustes = {"sentadilla": {"SQ_PROFUNDIDAD": {"umbral": 120}, "SQ_TRONCO": {"activa": False}}}
+    r = cliente.post(
+        "/v1/analisis/puntos",
+        json={"ejercicio": fx["ejercicio"], "fotogramas": fx["fotogramas"], "ajustes": ajustes},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["puntaje"] == 100
+
+
+def test_video_rechaza_ajustes_mal_formados():
+    r = cliente.post(
+        "/v1/analisis/video",
+        files={"video": ("a.mp4", b"x", "video/mp4")},
+        data={"ejercicio": "sentadilla", "ajustes": "{no es json"},
+    )
+    assert r.status_code == 422
+    assert r.json()["codigo"] == "AJUSTES_INVALIDOS"

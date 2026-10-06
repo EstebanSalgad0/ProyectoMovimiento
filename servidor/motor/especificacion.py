@@ -8,7 +8,7 @@ análisis en tiempo real, así ambos motores evalúan con las mismas reglas.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -113,6 +113,35 @@ class Especificacion:
     @property
     def ids(self) -> List[str]:
         return list(self.ejercicios.keys())
+
+    def con_ajustes(self, ajustes: Optional[Dict[str, Any]]) -> "Especificacion":
+        """Copia con objetivos personales: otro umbral o verificaciones desactivadas.
+
+        Formato (igual que en la app): {ejercicio: {codigo: {"umbral": 120, "activa": true}}}.
+        Ejercicios o códigos desconocidos se ignoran.
+        """
+        if not ajustes:
+            return self
+        ejercicios = dict(self.ejercicios)
+        for ej_id, por_codigo in ajustes.items():
+            ej = ejercicios.get(ej_id)
+            if ej is None or not isinstance(por_codigo, dict):
+                continue
+            nuevas = []
+            for v in ej.verificaciones:
+                a = por_codigo.get(v.codigo)
+                if not isinstance(a, dict):
+                    nuevas.append(v)
+                    continue
+                if a.get("activa", True) is False:
+                    continue
+                umbral = a.get("umbral")
+                if isinstance(umbral, (int, float)) and not isinstance(umbral, bool):
+                    nuevas.append(replace(v, umbral=float(umbral)))
+                else:
+                    nuevas.append(v)
+            ejercicios[ej_id] = replace(ej, verificaciones=tuple(nuevas))
+        return replace(self, ejercicios=ejercicios)
 
 
 def _validar_senal(ej_id: str, s: Senal) -> None:

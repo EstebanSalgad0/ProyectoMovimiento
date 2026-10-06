@@ -161,3 +161,48 @@ def test_resultado_entrega_serie_acotada():
     serie = analizador.resultado()["serie"]
     assert len(serie["t_ms"]) == len(serie["valores"]) <= SPEC.globales.puntos_serie_max
     assert serie["metrica"] == "rodilla_promedio"
+
+
+# ------------------------------------------------------- objetivos personales
+def _analizar_con(spec, nombre, **kwargs):
+    fx, fotogramas = _cargar(DIR_FIXTURES / f"{nombre}.json")
+    a = Analizador(spec, fx["ejercicio"], **kwargs)
+    for f in fotogramas:
+        a.procesar(f)
+    return a.resultado()
+
+
+def test_ajustes_cambian_umbral_y_desactivan_verificaciones():
+    spec = SPEC.con_ajustes(
+        {
+            "sentadilla": {"SQ_PROFUNDIDAD": {"umbral": 120}, "SQ_TRONCO": {"activa": False}},
+            "inexistente": {"X": {"umbral": 1}},
+        }
+    )
+    r = _analizar_con(spec, "sentadilla_lateral_poco_profunda")
+    assert [h["codigo"] for h in r["hallazgos"]] == []
+    assert r["puntaje"] == 100
+    # La especificación original no cambia.
+    assert _analizar_con(SPEC, "sentadilla_lateral_poco_profunda")["puntaje"] == 70
+
+
+def test_ajustes_vacios_devuelven_la_misma_especificacion():
+    assert SPEC.con_ajustes(None) is SPEC
+    assert SPEC.con_ajustes({}) is SPEC
+
+
+def test_esqueleto_muestreado_solo_con_tamano_de_cuadro():
+    # Los fixtures no traen tamaño de cuadro: no hay esqueleto aunque se pida.
+    r = _analizar_con(SPEC, "curl_frontal_correcto", registrar_esqueleto=True)
+    assert "esqueleto" not in r
+    fx, fotogramas = _cargar(DIR_FIXTURES / "curl_frontal_correcto.json")
+    a = Analizador(SPEC, fx["ejercicio"], registrar_esqueleto=True)
+    for f in fotogramas:
+        f.ancho, f.alto = 720, 1280
+        a.procesar(f)
+    esq = a.resultado()["esqueleto"]
+    assert esq["aspecto"] == round(720 / 1280, 4)
+    assert len(esq["t_ms"]) == len(esq["puntos"])
+    assert all(b - a_ >= 100 for a_, b in zip(esq["t_ms"], esq["t_ms"][1:], strict=False))
+    assert len(esq["puntos"][0]) == 3 * len(esq["indices"])
+    assert all(0 <= v <= 1.2 for v in esq["puntos"][0][0::3])

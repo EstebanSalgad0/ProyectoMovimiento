@@ -31,6 +31,9 @@ GRUPOS = {
     "tobillos": TOBILLO,
 }
 
+# Puntos que se devuelven para revisar el movimiento (igual que la app).
+INDICES_ESQUELETO = (0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 31, 32)
+
 # Margen (normalizado) fuera de la imagen a partir del cual un punto se descarta.
 MARGEN_FUERA_DE_CUADRO = 0.05
 
@@ -48,6 +51,9 @@ class Fotograma:
     t_ms: int
     imagen: Optional[np.ndarray] = None
     mundo: Optional[np.ndarray] = None
+    # Tamaño del cuadro en píxeles (para normalizar el esqueleto que se devuelve).
+    ancho: Optional[int] = None
+    alto: Optional[int] = None
 
     @classmethod
     def desde_listas(
@@ -84,4 +90,4 @@ class Fotograma:
         mundo = None
         if world_landmarks:
             mundo = np.array([(w.x, w.y, w.z) for w in world_landmarks[:NUM_PUNTOS]], dtype=np.float64)
-        return cls(t_ms=int(t_ms), imagen=imagen, mundo=mundo)
+        return cls(t_ms=int(t_ms), imagen=imagen, mundo=mundo, ancho=ancho, alto=alto)

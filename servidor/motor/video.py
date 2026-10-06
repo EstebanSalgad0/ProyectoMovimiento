@@ -63,7 +63,7 @@ def fotogramas_desde_video(ruta: str, modelo: str, fps_objetivo: float) -> Itera
                         mundo = resultado.pose_world_landmarks[0] if resultado.pose_world_landmarks else None
                         yield Fotograma.desde_mediapipe(t_ms, resultado.pose_landmarks[0], mundo, ancho, alto)
                     else:
-                        yield Fotograma(t_ms=t_ms)
+                        yield Fotograma(t_ms=t_ms, ancho=ancho, alto=alto)
                 idx += 1
         if leidos == 0:
             raise VideoInvalido("El video no contiene cuadros legibles")

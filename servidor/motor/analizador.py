@@ -15,7 +15,7 @@ from .especificacion import Especificacion, Verificacion
 from .filtros import FiltroOneEuro
 from .geometria import redondear
 from .metricas import calcular_metricas, detectar_vista, grupos_faltantes
-from .puntos import Fotograma
+from .puntos import INDICES_ESQUELETO, Fotograma
 from .repeticiones import DetectorRepeticiones, EventoRepeticion
 
 VERSION_RESULTADO = "2.0"
@@ -124,8 +124,11 @@ class EstadoFotograma:
     repeticion_incompleta: bool = False
 
 
+INTERVALO_ESQUELETO_MS = 100
+
+
 class Analizador:
-    def __init__(self, especificacion: Especificacion, ejercicio_id: str):
+    def __init__(self, especificacion: Especificacion, ejercicio_id: str, registrar_esqueleto: bool = False):
         self.spec = especificacion
         self.ej = especificacion.ejercicio(ejercicio_id)
         self.g = especificacion.globales
@@ -134,6 +137,38 @@ class Analizador:
         self.fotogramas: List[FotogramaProcesado] = []
         self.repeticiones: List[RepeticionEvaluada] = []
         self.incompletas = 0
+        # Esqueleto muestreado (~10 cuadros/s) para revisar el movimiento en la app.
+        self.registrar_esqueleto = registrar_esqueleto
+        self._esqueleto_t: List[int] = []
+        self._esqueleto_puntos: List[Optional[List[float]]] = []
+        self._esqueleto_aspecto: Optional[float] = None
+
+    def _registrar_esqueleto(self, f: Fotograma) -> None:
+        if not f.ancho or not f.alto:
+            return
+        if self._esqueleto_t and f.t_ms - self._esqueleto_t[-1] < INTERVALO_ESQUELETO_MS:
+            return
+        self._esqueleto_t.append(f.t_ms)
+        if f.imagen is None:
+            self._esqueleto_puntos.append(None)
+            return
+        if self._esqueleto_aspecto is None:
+            self._esqueleto_aspecto = round(f.ancho / f.alto, 4)
+        cuadro: List[float] = []
+        for i in INDICES_ESQUELETO:
+            x, y, _, v = f.imagen[i]
+            cuadro += [round(float(x) / f.ancho, 3), round(float(y) / f.alto, 3), round(float(v), 2)]
+        self._esqueleto_puntos.append(cuadro)
+
+    def esqueleto(self) -> Optional[Dict[str, Any]]:
+        if not any(c is not None for c in self._esqueleto_puntos):
+            return None
+        return {
+            "aspecto": self._esqueleto_aspecto,
+            "indices": list(INDICES_ESQUELETO),
+            "t_ms": list(self._esqueleto_t),
+            "puntos": list(self._esqueleto_puntos),
+        }
 
     # ------------------------------------------------------------------ proceso
     def _suavizar(self, metricas: Dict[str, Optional[float]], t_s: float) -> Dict[str, Optional[float]]:
@@ -153,6 +188,8 @@ class Analizador:
 
     def procesar(self, f: Fotograma) -> EstadoFotograma:
         t_s = f.t_ms / 1000.0
+        if self.registrar_esqueleto:
+            self._registrar_esqueleto(f)
         vmin = self.g.visibilidad_minima
         metricas = self._suavizar(calcular_metricas(f, vmin), t_s)
         vista = detectar_vista(f, vmin, self.g.umbral_frontal, self.g.umbral_lateral)
@@ -384,6 +421,10 @@ class Analizador:
             )
 
         feedback = [f"{h['titulo']}: {h['mensaje']}" for h in hallazgos] + [a["mensaje"] for a in aciertos]
+        extra: Dict[str, Any] = {}
+        esqueleto = self.esqueleto() if self.registrar_esqueleto else None
+        if esqueleto is not None:
+            extra["esqueleto"] = esqueleto
         return {
             "version": VERSION_RESULTADO,
             "especificacion": self.spec.version,
@@ -404,6 +445,7 @@ class Analizador:
                 "confianza": round(porcentaje, 2),
             },
             "duracion_s": round(duracion, 1),
+            **extra,
         }
 
 
